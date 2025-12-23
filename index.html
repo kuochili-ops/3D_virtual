@@ -3,25 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Shinjuku 45° Illusion App</title>
+    <title>Shinjuku Cat Precision Angle</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        #app-ui {
-            position: absolute; top: 20px; left: 20px; z-index: 1000;
-            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px);
-            padding: 15px; border-radius: 12px; border: 1px solid rgba(0, 255, 255, 0.3);
-            display: flex; gap: 8px; width: 280px;
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
+        #ui-box {
+            position: absolute; top: 15px; left: 15px; z-index: 100;
+            background: rgba(0,0,0,0.75); padding: 12px; border-radius: 10px;
+            border: 1px solid #00ffff; display: flex; gap: 8px;
         }
-        input { flex: 1; padding: 10px; border-radius: 6px; border: none; background: #222; color: #fff; font-size: 14px; outline: none; }
-        input:focus { box-shadow: 0 0 5px #00ffff; }
-        button { padding: 10px 15px; border-radius: 6px; border: none; background: #00ffff; color: #000; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:active { transform: scale(0.95); opacity: 0.8; }
+        input { padding: 8px; border-radius: 4px; border: none; background: #222; color: #fff; width: 160px; }
+        button { padding: 8px 15px; border-radius: 4px; border: none; background: #00ffff; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div id="app-ui">
-    <input type="text" id="textInput" value="新宿3D貓位置與角度" placeholder="輸入文字...">
+<div id="ui-box">
+    <input type="text" id="textInput" value="新宿3D貓拍攝視角" placeholder="輸入文字...">
     <button id="updateBtn">更新</button>
 </div>
 
@@ -32,13 +29,13 @@
 <script type="module">
     import * as THREE from 'three';
 
-    class ShinjukuIllusionApp {
+    class ShinjukuCatView {
         constructor() {
-            this.config = { speed: 0.08, depth: 40, fontSize: 320, color: "#00ffcc" };
+            this.config = { speed: 0.06, depth: 55, fontSize: 300, color: "#00ffcc" };
             this.scene = new THREE.Scene();
-            // 使用較小的 FOV (25) 來模擬長焦攝影，減少畸變，增加錯視感
-            this.camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 1, 2000);
-            this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            // 模擬手機鏡頭廣角感
+            this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+            this.renderer = new THREE.WebGLRenderer({ antialias: true });
             this.charGroups = [];
             this.init();
             this.animate();
@@ -49,11 +46,10 @@
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(this.renderer.domElement);
 
-            // --- 精準角度：模仿新宿 3D 貓的拍攝站點 ---
-            // 站在斜前方 45 度，視線稍微與轉角中心對齊
-            const distance = 120; 
-            this.camera.position.set(distance, distance * 0.4, distance); 
-            this.camera.lookAt(0, 0, 0); 
+            // --- 關鍵修正：模仿照片中的地面仰視 45 度位 ---
+            // x: 右側偏移, y: 地面仰視高度, z: 正面距離
+            this.camera.position.set(50, 28, 65); 
+            this.camera.lookAt(-12, 5, -10); // 焦點對準貓頭即將右轉的轉角中心
 
             this.scene.add(new THREE.AmbientLight(0xffffff, 4));
             this.update();
@@ -86,7 +82,7 @@
             this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
             const chars = text.split('');
-            const geometry = new THREE.PlaneGeometry(10, 10);
+            const geometry = new THREE.PlaneGeometry(9, 9);
 
             chars.forEach((c, i) => {
                 const group = new THREE.Group();
@@ -95,26 +91,26 @@
                 for (let j = 0; j < this.config.depth; j++) {
                     const color = new THREE.Color(this.config.color);
                     const hsl = {}; color.getHSL(hsl);
-                    if (j > 0) hsl.l *= (0.2 + 0.4 * Math.pow(1 - j/this.config.depth, 1.2));
+                    if (j > 0) hsl.l *= (0.12 + 0.45 * Math.pow(1 - j/this.config.depth, 1.4));
                     else hsl.l = 1.0;
                     color.setHSL(hsl.h, hsl.s, hsl.l);
 
                     const mat = new THREE.MeshBasicMaterial({ 
-                        map: tex, transparent: true, color: color, alphaTest: 0.15, side: THREE.DoubleSide
+                        map: tex, transparent: true, color: color, alphaTest: 0.18, side: THREE.DoubleSide
                     });
                     const m = new THREE.Mesh(geometry, mat);
-                    m.position.z = -(j * 0.12); // 文字厚度
+                    m.position.z = -(j * 0.08); // 厚度
                     group.add(m);
                 }
 
-                const spacing = 12;
+                const spacing = 7.5;
                 group.userData = { 
                     angle: 0, 
-                    state: 'right-wall', 
-                    xStart: 80 + (i * spacing), 
+                    state: 'right-wall', // 貓尾牆面
+                    xStart: 60 + (i * spacing), 
                     zStart: 0 
                 };
-                group.position.set(group.userData.xStart, 0, group.userData.zStart);
+                group.position.set(group.userData.xStart, 10, group.userData.zStart);
                 this.scene.add(group);
                 this.charGroups.push(group);
             });
@@ -122,42 +118,41 @@
 
         animate() {
             requestAnimationFrame(() => this.animate());
-            const R = 20; // 轉向半徑
+            const R = 20; // 貓頭處的轉彎半徑
             const cornerX = 0; 
 
             this.charGroups.forEach(g => {
                 let s = this.config.speed;
 
                 if (g.userData.state === 'right-wall') {
-                    g.position.x -= s; 
+                    g.position.x -= s; // 從右向左行進
                     if (g.position.x <= cornerX) g.userData.state = 'turning';
                 } else if (g.userData.state === 'turning') {
-                    const slow = 1 - (Math.sin(g.userData.angle) * 0.4);
-                    g.userData.angle += (s * slow / R);
+                    g.userData.angle += (s / R);
                     if (g.userData.angle < Math.PI / 2) {
                         g.position.x = cornerX - R * Math.sin(g.userData.angle);
                         g.position.z = g.userData.zStart - R + R * Math.cos(g.userData.angle);
                         g.rotation.y = -g.userData.angle;
                     } else {
-                        g.userData.state = 'left-wall';
+                        g.userData.state = 'left-wall'; // 沒入貓頭那一側的牆
                     }
                 } else {
                     g.position.z -= s; 
                 }
 
-                if (g.position.z < -120) {
+                if (g.position.z < -100) {
                     g.userData.state = 'right-wall';
                     g.userData.angle = 0;
                     g.rotation.y = 0;
-                    const maxCharX = Math.max(...this.charGroups.map(ch => ch.position.x), 70);
-                    g.position.set(maxCharX + 12, 0, 0);
+                    const maxCharX = Math.max(...this.charGroups.map(ch => ch.position.x), 50);
+                    g.position.set(maxCharX + 7.5, 10, 0);
                 }
             });
             this.renderer.render(this.scene, this.camera);
         }
     }
 
-    const app = new ShinjukuIllusionApp();
+    const app = new ShinjukuCatView();
     document.getElementById('updateBtn').onclick = () => app.update();
 </script>
 </body>
