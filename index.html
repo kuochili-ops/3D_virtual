@@ -3,30 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR Studio Final</title>
+    <title>AR Studio - Flow Fix</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #video-bg { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 1; }
         #three-canvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
         
-        /* 底部極簡面板 */
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: linear-gradient(transparent, rgba(0,0,0,0.8));
-            padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.9));
+            padding: 25px 20px; display: flex; flex-direction: column; align-items: center; gap: 15px;
             box-sizing: border-box;
         }
-        .control-group { width: 90%; display: flex; justify-content: space-between; align-items: center; }
-        input[type="text"] { background: rgba(255,255,255,0.1); border: 1px solid #00ffff; color: #fff; padding: 5px 10px; border-radius: 5px; width: 60%; }
+        .control-group { width: 100%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; }
+        input[type="text"] { background: rgba(255,255,255,0.15); border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 8px; width: 65%; font-size: 16px; }
         
-        /* 錄影控制 */
         #rec-btn {
-            width: 65px; height: 65px; border-radius: 50%; border: 4px solid #fff;
+            width: 70px; height: 70px; border-radius: 50%; border: 5px solid #fff;
             background: red; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 15px rgba(255,0,0,0.5);
         }
-        #rec-btn.active { border-radius: 12px; transform: scale(0.8); background: #fff; }
+        #rec-btn.active { border-radius: 15px; transform: scale(0.85); background: #fff; box-shadow: 0 0 20px #fff; }
         
-        .small-btn { background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 5px 10px; border-radius: 4px; font-size: 10px; }
+        .small-btn { background: #00ffff; color: #000; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -37,14 +36,14 @@
 <div id="app-ui">
     <div class="control-group">
         <input type="text" id="textInput" value="MERCEDES-BENZ">
-        <button class="small-btn" id="toggleGuide">隱藏路徑</button>
+        <button class="small-btn" id="toggleGuide">隱藏路徑球</button>
     </div>
-    <div class="control-group" style="padding: 10px 0;">
-        <span style="color: #00ffff; font-size: 10px;">慢速 ←→ 快速</span>
-        <input type="range" id="speedSlider" min="1" max="50" value="8" style="width: 60%; accent-color: #00ffff;">
+    <div class="control-group">
+        <span style="color: #00ffff; font-size: 11px;">流速調整</span>
+        <input type="range" id="speedSlider" min="1" max="50" value="8" style="width: 70%; accent-color: #00ffff;">
     </div>
-    <div id="rec-btn" id="recordBtn"></div>
-    <button id="startCam" style="background:none; border:none; color:#00ffff; font-size:10px; margin-top:5px;">[ 點擊啟動相機鏡頭 ]</button>
+    <div id="rec-btn"></div>
+    <button id="startCam" style="background:none; border:none; color:#aaa; font-size:11px; margin-top:5px; text-decoration:underline;">點擊授權相機權限</button>
 </div>
 
 <script type="importmap">
@@ -60,11 +59,10 @@
     import * as THREE from 'three';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARFinalApp {
+    class ARFlowApp {
         constructor() {
             this.config = { speed: 0.0008, showGuides: true };
             this.scene = new THREE.Scene();
-            // preserveDrawingBuffer 是錄影成功的關鍵
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
             this.charGroups = [];
@@ -75,15 +73,16 @@
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(window.devicePixelRatio);
             document.getElementById('three-canvas').appendChild(this.renderer.domElement);
-            this.camera.position.set(0, 10, 140);
+            this.camera.position.set(0, 10, 150);
             this.scene.add(new THREE.AmbientLight(0xffffff, 5));
 
-            // 路徑兩端設在畫面兩側
+            // 重設路徑點：P0 在右，P2 在左
             this.points = [
-                this.createPoint(new THREE.Vector3(50, 0, -20)),  // START (右端)
-                this.createPoint(new THREE.Vector3(0, 0, 10)),    // PIVOT (中間偏前)
-                this.createPoint(new THREE.Vector3(-50, 0, -20))  // END (左端)
+                this.createPoint(new THREE.Vector3(60, 0, -20)),  // 起點 (右)
+                this.createPoint(new THREE.Vector3(0, 0, 15)),    // 轉向中點
+                this.createPoint(new THREE.Vector3(-60, 0, -20))  // 終點 (左)
             ];
 
             const drag = new DragControls(this.points, this.camera, this.renderer.domElement);
@@ -99,7 +98,7 @@
             document.getElementById('toggleGuide').onclick = (e) => {
                 this.config.showGuides = !this.config.showGuides;
                 this.points.forEach(p => p.visible = this.config.showGuides);
-                e.target.textContent = this.config.showGuides ? "隱藏路徑" : "顯示路徑";
+                e.target.textContent = this.config.showGuides ? "隱藏路徑球" : "顯示路徑球";
             };
 
             document.getElementById('rec-btn').onclick = () => this.toggleRecord();
@@ -151,12 +150,15 @@
             requestAnimationFrame(() => this.animate());
             const time = Date.now() * this.config.speed;
             this.charGroups.forEach(g => {
-                let t = (1.4 - (time + g.userData.tOffset) % 1.8); 
+                // 修改流向邏輯：讓 t 從 0 (右) 增加到 1 (左)
+                let t = (time + g.userData.tOffset) % 1.6 - 0.3; 
+                
                 if (t >= 0 && t <= 1) {
                     const pos = this.curve.getPointAt(t);
                     const tangent = this.curve.getTangentAt(t).normalize();
                     g.position.copy(pos);
-                    g.lookAt(pos.clone().add(tangent.multiplyScalar(-1)));
+                    // 頭部朝向切線方向 (t 增加的方向)
+                    g.lookAt(pos.clone().add(tangent));
                     g.rotateY(Math.PI / 2);
                     g.visible = true;
                 } else g.visible = false;
@@ -169,18 +171,14 @@
             if (!this.recorder || this.recorder.state === "inactive") {
                 this.chunks = [];
                 const stream = this.renderer.domElement.captureStream(30);
-                
-                // 增加相容性檢查：依序嘗試常用的錄影編碼
-                const types = ['video/webm;codecs=vp9', 'video/webm', 'video/mp4'];
-                let selectedType = types.find(type => MediaRecorder.isTypeSupported(type));
-                
-                this.recorder = new MediaRecorder(stream, { mimeType: selectedType });
+                const type = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+                this.recorder = new MediaRecorder(stream, { mimeType: type });
                 this.recorder.ondataavailable = e => this.chunks.push(e.data);
                 this.recorder.onstop = () => {
-                    const blob = new Blob(this.chunks, { type: selectedType });
+                    const blob = new Blob(this.chunks, { type: type });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
-                    a.href = url; a.download = 'mercedes_ar_video.' + (selectedType.includes('mp4') ? 'mp4' : 'webm');
+                    a.href = url; a.download = 'mercedes_ar.' + (type.includes('mp4') ? 'mp4' : 'webm');
                     a.click();
                 };
                 this.recorder.start();
@@ -191,7 +189,7 @@
             }
         }
     }
-    new ARFinalApp();
+    new ARFlowApp();
 </script>
 </body>
 </html>
