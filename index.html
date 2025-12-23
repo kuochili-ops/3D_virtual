@@ -2,139 +2,121 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>3D 堆疊立體跑馬燈 - 平滑轉向版</title>
+    <title>3D 絲滑長字串跑馬燈</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #ui {
             position: absolute; top: 20px; left: 20px; z-index: 100;
-            background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; color: white;
-            border: 1px solid #444;
+            background: rgba(0,0,0,0.85); padding: 18px; border-radius: 12px; color: white;
+            border: 1px solid #00ffff; box-shadow: 0 0 15px rgba(0,255,255,0.3);
         }
-        input { padding: 8px; border: none; border-radius: 4px; width: 160px; outline: none; }
-        button { padding: 8px 15px; background: #00ffff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        button:hover { background: #00cccc; }
-        .hint { font-size: 12px; color: #888; margin-top: 8px; }
+        input { padding: 10px; border-radius: 6px; border: 1px solid #444; width: 280px; background: #222; color: #fff; }
+        button { padding: 10px 20px; background: #00ffff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #fff; color: #000; }
+        .hint { font-size: 12px; color: #00ffff; margin-top: 10px; opacity: 0.8; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <input type="text" id="textInput" value="美列管中國製無人機" placeholder="輸入文字...">
-        <button id="updateBtn">發送</button>
-        <div class="hint">模擬 3D 看板：右後出現 → 左前轉彎 → 進門</div>
+        <input type="text" id="textInput" value="基隆市府安排免費接駁車，台北跨年夜後返家無憂" placeholder="輸入長字串...">
+        <button id="updateBtn">發送看板內容</button>
+        <div class="hint">系統已自動調整字距，長文字不亂跑</div>
     </div>
 
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-            }
-        }
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 1. 場景初始化 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // 設定類似照片的街頭仰視角
-        camera.position.set(15, 12, 20);
+        camera.position.set(18, 12, 22);
         camera.lookAt(0, 4, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x050505);
+        renderer.setClearColor(0x020202);
         document.body.appendChild(renderer.domElement);
 
-        // 光源與輔助網格
-        scene.add(new THREE.AmbientLight(0xffffff, 1.2));
-        const grid = new THREE.GridHelper(30, 15, 0x333333, 0x222222);
+        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+        const grid = new THREE.GridHelper(50, 20, 0x222222, 0x111111);
         scene.add(grid);
 
-        // --- 2. 堆疊立體字模組 (實作您的密集線連結概念) ---
+        // --- 核心：高質量堆疊字 ---
         function createStackedChar(char) {
             const group = new THREE.Group();
-            const layers = 25;       // 密集度：25層，轉彎時側面會很紮實
-            const depthStep = 0.04;  // 每層間距
+            const layers = 35; 
+            const depthStep = 0.04; 
 
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 256;
             const ctx = canvas.getContext('2d');
-            // 使用系統內建中文字體，保證不失效
-            ctx.font = 'bold 180px "Microsoft JhengHei", "微軟正黑體", sans-serif';
+            ctx.font = 'bold 180px "Microsoft JhengHei", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
             for (let i = 0; i < layers; i++) {
-                // 漸層色：第一層最亮，後面層漸暗產生立體陰影
-                const colorVal = i === 0 ? '#00ffff' : `rgb(0, ${120 - i * 4}, ${180 - i * 6})`;
+                const colorVal = i === 0 ? '#00ffff' : `rgb(0, ${130 - i * 3}, ${180 - i * 4})`;
                 ctx.clearRect(0, 0, 256, 256);
                 ctx.fillStyle = colorVal;
                 ctx.fillText(char, 128, 128);
 
                 const texture = new THREE.CanvasTexture(canvas);
-                const material = new THREE.MeshBasicMaterial({ 
-                    map: texture, 
-                    transparent: true,
-                    depthWrite: true 
-                });
-
-                const plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
-                plane.position.z = -(i * depthStep); // 向後堆疊
+                const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+                const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.5), material);
+                plane.position.z = -(i * depthStep);
                 group.add(plane);
             }
             return group;
         }
 
-        // --- 3. 跑馬燈控制器 ---
         let charGroups = [];
         const config = {
-            startX: 15,
-            startY: 5,
-            startZ: 4,
-            turnX: -6,      // 觸發轉彎的 X 座標
-            speed: 0.08,    // 移動速度
-            spacing: 2.8    // 字距
+            startX: 20,     // 從更右邊開始
+            turnX: -8,      // 轉彎點
+            speed: 0.04,    // 速度調慢一倍
+            spacing: 3.5,   // 增加字距防止碰撞
+            resetZ: -18     // 消失深度
         };
 
         function startMarquee(text) {
             charGroups.forEach(g => scene.remove(g));
             charGroups = [];
-            
             const chars = text.split('');
             chars.forEach((c, i) => {
                 const g = createStackedChar(c);
-                // 初始排隊位置
-                g.position.set(config.startX + (i * config.spacing), config.startY, config.startZ);
+                // 初始位置排隊排更長
+                g.position.set(config.startX + (i * config.spacing), 5, 4);
                 scene.add(g);
                 charGroups.push(g);
             });
         }
 
-        // --- 4. 動畫邏輯：平滑過彎與前進 ---
         function animate() {
             requestAnimationFrame(animate);
             
-            charGroups.forEach((group) => {
+            charGroups.forEach((group, index) => {
                 if (group.position.x > config.turnX) {
-                    // 階段 1：直行
+                    // 階段 1：慢速直行
                     group.position.x -= config.speed;
                 } else {
-                    // 階段 2：轉角度中 + 前進 (轉向門內)
-                    // 平滑旋轉至 -90 度
+                    // 階段 2：轉角度後前進
                     if (group.rotation.y > -Math.PI / 2) {
-                        group.rotation.y -= 0.1; 
+                        group.rotation.y -= 0.06; // 平滑轉向
                     }
-                    // 往深處走 (Z軸)
-                    group.position.z -= config.speed * 1.5;
-                    // 稍微往左補償，形成優美的弧線
-                    group.position.x -= 0.02;
+                    group.position.z -= config.speed * 1.8; // 往深處走
+                    group.position.x -= 0.01; 
                 }
 
-                // 循環重置 (當字完全進入「門」之後)
-                if (group.position.z < -15) {
-                    group.position.set(config.startX + 2, config.startY, config.startZ);
+                // 核心改進：當最後一個字都消失後，整串重新循環
+                // 或是每個字獨立循環但要檢查前方是否有字 (此處採逐字重置但加大緩衝)
+                if (group.position.z < config.resetZ) {
+                    // 找出目前排隊最末端的 X 座標
+                    const lastX = Math.max(...charGroups.map(g => g.position.x));
+                    group.position.set(lastX + config.spacing, 5, 4);
                     group.rotation.y = 0;
                 }
             });
@@ -142,19 +124,11 @@
             renderer.render(scene, camera);
         }
 
-        // 事件綁定
         document.getElementById('updateBtn').onclick = () => {
             startMarquee(document.getElementById('textInput').value);
         };
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // 啟動 App
-        startMarquee("美列管中國製無人機");
+        startMarquee(document.getElementById('textInput').value);
         animate();
     </script>
 </body>
