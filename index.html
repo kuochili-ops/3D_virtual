@@ -3,38 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Path Vision Engine - Mercedes Benz Edition</title>
+    <title>3D Path Engine - Direction Toggle</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #app-ui {
             position: absolute; top: 15px; left: 15px; z-index: 1000;
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);
-            padding: 20px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.2);
-            display: flex; flex-direction: column; gap: 15px; width: 250px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            padding: 18px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex; flex-direction: column; gap: 12px; width: 220px;
         }
-        .ui-row { display: flex; flex-direction: column; gap: 8px; }
-        label { color: #aaa; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
-        input[type="text"] { padding: 10px; border-radius: 8px; border: none; background: #222; color: #fff; font-size: 14px; }
-        input[type="range"] { cursor: pointer; accent-color: #00ffff; height: 4px; }
-        #instruction { position: absolute; bottom: 20px; width: 100%; text-align: center; color: #00ffff; font-size: 12px; pointer-events: none; opacity: 0.7; }
+        .ui-row { display: flex; flex-direction: column; gap: 5px; }
+        label { color: #888; font-size: 11px; font-weight: bold; }
+        input[type="text"] { padding: 8px; border-radius: 6px; border: none; background: #222; color: #fff; }
+        button { 
+            padding: 10px; border-radius: 8px; border: none; 
+            background: #00ffff; color: #000; font-weight: bold; cursor: pointer;
+            transition: 0.2s;
+        }
+        button:active { transform: scale(0.95); opacity: 0.8; }
+        input[type="range"] { accent-color: #00ffff; }
     </style>
 </head>
 <body>
 
 <div id="app-ui">
     <div class="ui-row">
-        <label>Display Text</label>
+        <label>文字內容</label>
         <input type="text" id="textInput" value="MERCEDES-BENZ">
     </div>
     <div class="ui-row">
-        <label>Flow Speed</label>
+        <label>行進速度</label>
         <input type="range" id="speedSlider" min="1" max="100" value="15">
     </div>
-    <div style="color: #666; font-size: 10px;">Drag the glowing spheres to edit path.</div>
+    <button id="toggleDir">切換出現端 (逆向/正向)</button>
 </div>
-
-<div id="instruction">拖動青色球體定義起點、轉彎圓角與終點</div>
 
 <script type="importmap">
     { 
@@ -50,15 +52,13 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    // 封裝核心路徑引擎
-    class ShinjukuPathEngine {
+    class TogglePathEngine {
         constructor() {
-            this.config = { speed: 0.0015, depth: 40, spacing: 0.12 };
+            this.config = { speed: 0.0015, depth: 40, spacing: 0.12, reverse: false };
             this.scene = new THREE.Scene();
             this.camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 1000);
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             this.charGroups = [];
-            this.controls = [];
             this.init();
         }
 
@@ -71,23 +71,24 @@
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
             this.orbit.enableDamping = true;
 
-            const ambient = new THREE.AmbientLight(0xffffff, 4);
-            this.scene.add(ambient);
+            this.scene.add(new THREE.AmbientLight(0xffffff, 4));
 
-            // 初始控制球
-            const p1 = this.createPoint(new THREE.Vector3(80, 0, 0));
-            const p2 = this.createPoint(new THREE.Vector3(0, 0, 0));
-            const p3 = this.createPoint(new THREE.Vector3(0, 0, -80));
-            this.points = [p1, p2, p3];
+            this.points = [
+                this.createPoint(new THREE.Vector3(75, 0, 0), "START"),
+                this.createPoint(new THREE.Vector3(0, 0, 0), "PIVOT"),
+                this.createPoint(new THREE.Vector3(0, 0, -75), "END")
+            ];
 
             this.drag = new DragControls(this.points, this.camera, this.renderer.domElement);
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
             this.drag.addEventListener('drag', () => this.updatePath());
 
-            // UI 連結
             document.getElementById('speedSlider').oninput = (e) => this.config.speed = e.target.value * 0.0001;
             document.getElementById('textInput').oninput = () => this.updateText();
+            document.getElementById('toggleDir').onclick = () => {
+                this.config.reverse = !this.config.reverse;
+            };
 
             this.updatePath();
             this.updateText();
@@ -100,27 +101,17 @@
             });
         }
 
-        createPoint(pos) {
-            const mesh = new THREE.Mesh(
-                new THREE.SphereGeometry(2.5, 16, 16), 
-                new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 })
-            );
+        createPoint(pos, name) {
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(2.5, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 }));
             mesh.position.copy(pos);
             this.scene.add(mesh);
             return mesh;
         }
 
         updatePath() {
-            this.curve = new THREE.QuadraticBezierCurve3(
-                this.points[0].position, 
-                this.points[1].position, 
-                this.points[2].position
-            );
+            this.curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
             if (this.line) this.scene.remove(this.line);
-            this.line = new THREE.Line(
-                new THREE.BufferGeometry().setFromPoints(this.curve.getPoints(50)),
-                new THREE.LineBasicMaterial({ color: 0x333333 })
-            );
+            this.line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(this.curve.getPoints(50)), new THREE.LineBasicMaterial({ color: 0x333333 }));
             this.scene.add(this.line);
         }
 
@@ -129,16 +120,13 @@
             this.charGroups = [];
             const text = document.getElementById('textInput').value || " ";
             const chars = text.split('');
-            const geometry = new THREE.PlaneGeometry(10, 10);
-
             chars.forEach((c, i) => {
                 const group = new THREE.Group();
                 const tex = this.createTexture(c);
                 for (let j = 0; j < this.config.depth; j++) {
                     const color = new THREE.Color(0xd0d0d0);
                     color.multiplyScalar(0.2 + 0.8 * Math.pow(1 - j/this.config.depth, 1.5));
-                    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: color, alphaTest: 0.15, side: THREE.DoubleSide });
-                    const m = new THREE.Mesh(geometry, mat);
+                    const m = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: color, alphaTest: 0.15, side: THREE.DoubleSide }));
                     m.position.z = -(j * 0.12);
                     group.add(m);
                 }
@@ -149,13 +137,10 @@
         }
 
         createTexture(char) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512; canvas.height = 512;
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-            ctx.font = `bold 320px sans-serif`;
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillStyle = "white"; 
-            ctx.fillText(char, 256, 256);
+            ctx.font = `bold 320px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = "white"; ctx.fillText(char, 256, 256);
             return new THREE.CanvasTexture(canvas);
         }
 
@@ -165,13 +150,19 @@
             const time = Date.now() * this.config.speed;
 
             this.charGroups.forEach(g => {
-                let t = (1.5 - (time + g.userData.tOffset) % 1.5); 
+                let rawT = (time + g.userData.tOffset) % 1.5;
+                // 核心邏輯：根據 reverse 狀態決定 t 的方向 (0->1 或 1->0)
+                let t = this.config.reverse ? (rawT - 0.2) : (1.3 - rawT);
+
                 if (t >= 0 && t <= 1) {
                     const pos = this.curve.getPointAt(t);
                     const tangent = this.curve.getTangentAt(t).normalize();
                     g.position.copy(pos);
                     g.lookAt(new THREE.Vector3().addVectors(pos, tangent));
-                    g.rotateY(Math.PI / 2); // 核心：X軸與切線重疊
+                    
+                    // 根據方向修正 180 度，讓字面永遠正對行進方向
+                    g.rotateY(this.config.reverse ? -Math.PI / 2 : Math.PI / 2);
+                    
                     g.visible = true;
                 } else {
                     g.visible = false;
@@ -181,7 +172,7 @@
         }
     }
 
-    new ShinjukuPathEngine();
+    new TogglePathEngine();
 </script>
 </body>
 </html>
