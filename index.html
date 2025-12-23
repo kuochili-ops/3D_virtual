@@ -2,12 +2,12 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>3D 轉彎路徑全可見模組</title>
+    <title>3D 慢速轉彎前進看板</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #ui {
             position: absolute; top: 20px; left: 20px; z-index: 100;
-            background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; color: white;
+            background: rgba(0,0,0,0.85); padding: 15px; border-radius: 10px; color: white;
             border: 1px solid #444;
         }
         button { padding: 8px 12px; background: #00ffff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
@@ -16,8 +16,9 @@
 <body>
 
     <div id="ui">
-        <input type="text" id="textInput" value="看到轉彎後繼續前進" style="padding:8px; width:200px;">
-        <button id="updateBtn">更新</button>
+        <input type="text" id="textInput" value="基隆市府安排免費接駁車" style="padding:8px; width:220px;">
+        <button id="updateBtn">更新畫面</button>
+        <div style="font-size: 11px; color: #888; margin-top: 5px;">狀態：極慢速轉彎模式 (1/3 速度)</div>
     </div>
 
     <script type="importmap">
@@ -28,28 +29,22 @@
         import * as THREE from 'three';
 
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // 重要：調整相機位置，確保能看清左側轉彎後的深處
-        camera.position.set(25, 20, 35);
-        camera.lookAt(-10, 5, -15);
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // 視角優化：從側面斜後方觀看，能看清轉彎前後的所有路徑
+        camera.position.set(30, 20, 40);
+        camera.lookAt(-10, 5, -10);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+        scene.add(new THREE.AmbientLight(0xffffff, 2.0));
         
-        // 地面網格 - 延伸到 -100 確保能看清深度
-        const grid = new THREE.GridHelper(100, 40, 0x444444, 0x222222);
+        // 地面網格延伸，作為移動參考
+        const grid = new THREE.GridHelper(100, 50, 0x444444, 0x222222);
         scene.add(grid);
 
-        // 建立「視覺隧道」：讓您看清楚字體是進去這個通道前進
-        const tunnelGeom = new THREE.BoxGeometry(4, 8, 50);
-        const tunnelEdges = new THREE.EdgesGeometry(tunnelGeom);
-        const tunnel = new THREE.LineSegments(tunnelEdges, new THREE.LineBasicMaterial({ color: 0x555555 }));
-        tunnel.position.set(-10, 4, -20); // 放在轉彎後的路徑上
-        scene.add(tunnel);
-
+        // 密集堆疊字 (實作您的密集線連線概念)
         function createStackedChar(char) {
             const group = new THREE.Group();
             const layers = 35;
@@ -73,7 +68,8 @@
         }
 
         let charGroups = [];
-        const config = { speed: 0.15, turnX: -10, finishZ: -45, spacing: 4.5 };
+        // 設定極慢速度：0.03 (原先為 0.12)
+        const config = { speed: 0.03, turnX: -5, finishZ: -50, spacing: 4.5 };
 
         function start() {
             charGroups.forEach(g => scene.remove(g));
@@ -91,18 +87,26 @@
             requestAnimationFrame(animate);
             charGroups.forEach((group) => {
                 if (group.position.x > config.turnX) {
-                    // 階段 1：直行
+                    // 階段 1：慢速平移
                     group.position.x -= config.speed;
                 } else {
-                    // 階段 2：轉彎與前進
+                    // 階段 2：慢速轉彎與繼續前進
+                    
+                    // 1. 旋轉變慢 (0.02)
                     if (group.rotation.y > -Math.PI / 2) {
-                        group.rotation.y -= 0.15; // 快速轉向
+                        group.rotation.y -= 0.02; 
                     }
-                    // 向 Z 軸深處「隧道」前進
-                    group.position.z -= config.speed * 2; 
+                    
+                    // 2. 轉向後繼續沿著 Z 軸前進
+                    group.position.z -= config.speed * 2.5; 
+                    
+                    // 3. 微調 X 形成弧度，而不是死板的 90 度折角
+                    if (group.rotation.y > -Math.PI / 2) {
+                        group.position.x -= 0.015;
+                    }
                 }
 
-                // 當走到隧道盡頭才重置
+                // 走到很遠才重置
                 if (group.position.z < config.finishZ) {
                     const lastX = Math.max(...charGroups.map(g => g.position.x));
                     group.position.set(lastX + config.spacing, 5, 5);
