@@ -1,16 +1,36 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
-    <title>3D Billboard Marquee</title>
+    <meta charset="UTF-8">
+    <title>3D 中文立體跑馬燈模擬器</title>
     <style>
-        body { margin: 0; background: #222; overflow: hidden; }
-        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
+        #ui-container {
+            position: absolute; top: 20px; left: 20px; z-index: 100;
+            background: rgba(255, 255, 255, 0.1); padding: 15px; border-radius: 8px;
+            backdrop-filter: blur(5px); color: white;
+        }
+        input { padding: 8px; border: none; border-radius: 4px; width: 200px; }
+        button { padding: 8px 15px; cursor: pointer; background: #00ffff; border: none; border-radius: 4px; font-weight: bold; }
+        
+        /* 跑馬燈文字樣式 */
+        .marquee-text {
+            color: #00ffff;
+            font-size: 50px;
+            font-weight: bold;
+            white-space: nowrap;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #0088ff;
+            font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif;
+            user-select: none;
+        }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <input type="text" id="textInput" placeholder="輸入文字..." value="LENOVO 3D">
-        <button onclick="updateText()">傳送</button>
+
+    <div id="ui-container">
+        <input type="text" id="userInput" placeholder="輸入中文內容..." value="跨時空 3D 看板">
+        <button id="sendBtn">發送文字</button>
+        <p style="font-size: 12px; opacity: 0.7;">視角：模擬街頭仰視</p>
     </div>
 
     <script type="importmap">
@@ -24,79 +44,95 @@
 
     <script type="module">
         import * as THREE from 'three';
-        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
-        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-        // --- 初始化場景 ---
+        // --- 1. 場景基礎設定 ---
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        // 模擬照片中的仰視視角
+        camera.position.set(15, 10, 20);
+        camera.lookAt(0, 5, 0);
+
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.localClippingEnabled = true; // 啟用裁切功能
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // 設定相機視角 (模擬照片中的 45度角仰視)
-        camera.position.set(10, 8, 15);
-        camera.lookAt(0, 0, 0);
+        // --- 2. CSS2D 渲染器 (處理中文的關鍵) ---
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
 
-        // 光源
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(5, 10, 7.5);
-        scene.add(light);
-        scene.add(new THREE.AmbientLight(0x404040));
+        // --- 3. 建立虛擬看板框架 (輔助視覺) ---
+        const grid = new THREE.GridHelper(30, 30, 0x444444, 0x222222);
+        scene.add(grid);
 
-        // --- 建立看板空間與「門」的遮罩 ---
-        const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 2); // 定義在 z=2 處裁切
-
-        // 載入字體並啟動跑馬燈
-        const loader = new FontLoader();
-        let textMesh;
+        // --- 4. 跑馬燈核心模組 ---
+        let marqueeObject = null;
+        const startPos = { x: 15, y: 5, z: 2 };  // 右後方
+        const turnPos = { x: -8, y: 5, z: 2 }; // 左前方轉折點
         
-        loader.load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', (font) => {
-            window.updateText = () => {
-                const str = document.getElementById('textInput').value;
-                if(textMesh) scene.remove(textMesh);
+        function createMarquee(content) {
+            if (marqueeObject) {
+                scene.remove(marqueeObject);
+            }
 
-                const geometry = new TextGeometry(str, {
-                    font: font,
-                    size: 1,
-                    height: 0.3,
-                });
-                
-                const material = new THREE.MeshPhongMaterial({ 
-                    color: 0x00ffff, 
-                    clippingPlanes: [clipPlane] // 套用裁切平面
-                });
-                
-                textMesh = new THREE.Mesh(geometry, material);
-                textMesh.position.set(10, 0, 5); // 起點：右後方
-                scene.add(textMesh);
-            };
-            window.updateText();
-        });
+            const div = document.createElement('div');
+            div.className = 'marquee-text';
+            div.textContent = content;
 
-        // --- 動態循環 ---
+            marqueeObject = new CSS2DObject(div);
+            marqueeObject.position.set(startPos.x, startPos.y, startPos.z);
+            scene.add(marqueeObject);
+        }
+
+        // --- 5. 動畫與路徑邏輯 ---
         function animate() {
             requestAnimationFrame(animate);
-            
-            if (textMesh) {
-                // 模擬路徑邏輯
-                if (textMesh.position.x > -5) {
-                    textMesh.position.x -= 0.05; // 向左前移動
-                } else {
-                    textMesh.rotation.y = Math.PI / 2; // 轉向
-                    textMesh.position.z -= 0.05; // 進入門(往 z 軸深處)
+
+            if (marqueeObject) {
+                // 移動邏輯：如果還沒到左邊，就向左走
+                if (marqueeObject.position.x > turnPos.x) {
+                    marqueeObject.position.x -= 0.08; 
+                } 
+                // 到達左邊後，向右轉 (往 z 軸深處消失)
+                else {
+                    marqueeObject.position.z -= 0.08;
+                    // 稍微淡出效果 (CSS 處理)
+                    marqueeObject.element.style.opacity = Math.max(0, (marqueeObject.position.z + 5) / 5);
                 }
 
-                // 重置循環
-                if (textMesh.position.z < -5) {
-                    textMesh.position.set(10, 0, 5);
-                    textMesh.rotation.y = 0;
+                // 循環重置
+                if (marqueeObject.position.z < -10) {
+                    marqueeObject.position.set(startPos.x, startPos.y, startPos.z);
+                    marqueeObject.element.style.opacity = 1;
                 }
             }
-            
+
             renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
         }
+
+        // 綁定按鈕
+        document.getElementById('sendBtn').onclick = () => {
+            const val = document.getElementById('userInput').value;
+            createMarquee(val);
+        };
+
+        // 視窗縮放處理
+        window.onresize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        };
+
+        // 初始化執行
+        createMarquee("裸眼 3D 效果模擬");
         animate();
     </script>
 </body>
