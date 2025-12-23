@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Billboard Marquee</title>
+    <style>
+        body { margin: 0; background: #222; overflow: hidden; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <input type="text" id="textInput" placeholder="輸入文字..." value="LENOVO 3D">
+        <button onclick="updateText()">傳送</button>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
+        // --- 初始化場景 ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.localClippingEnabled = true; // 啟用裁切功能
+        document.body.appendChild(renderer.domElement);
+
+        // 設定相機視角 (模擬照片中的 45度角仰視)
+        camera.position.set(10, 8, 15);
+        camera.lookAt(0, 0, 0);
+
+        // 光源
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 7.5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        // --- 建立看板空間與「門」的遮罩 ---
+        const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 2); // 定義在 z=2 處裁切
+
+        // 載入字體並啟動跑馬燈
+        const loader = new FontLoader();
+        let textMesh;
+        
+        loader.load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', (font) => {
+            window.updateText = () => {
+                const str = document.getElementById('textInput').value;
+                if(textMesh) scene.remove(textMesh);
+
+                const geometry = new TextGeometry(str, {
+                    font: font,
+                    size: 1,
+                    height: 0.3,
+                });
+                
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: 0x00ffff, 
+                    clippingPlanes: [clipPlane] // 套用裁切平面
+                });
+                
+                textMesh = new THREE.Mesh(geometry, material);
+                textMesh.position.set(10, 0, 5); // 起點：右後方
+                scene.add(textMesh);
+            };
+            window.updateText();
+        });
+
+        // --- 動態循環 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (textMesh) {
+                // 模擬路徑邏輯
+                if (textMesh.position.x > -5) {
+                    textMesh.position.x -= 0.05; // 向左前移動
+                } else {
+                    textMesh.rotation.y = Math.PI / 2; // 轉向
+                    textMesh.position.z -= 0.05; // 進入門(往 z 軸深處)
+                }
+
+                // 重置循環
+                if (textMesh.position.z < -5) {
+                    textMesh.position.set(10, 0, 5);
+                    textMesh.rotation.y = 0;
+                }
+            }
+            
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
