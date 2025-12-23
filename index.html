@@ -3,23 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 鞋盒仰望看板 App</title>
+    <title>Shinjuku Cat Angle App</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
-        #ui {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 100; background: rgba(0, 0, 0, 0.8); padding: 12px; border-radius: 15px;
-            display: flex; gap: 10px; border: 1px solid #00ffff; width: 90%; max-width: 400px;
+        #app-ui {
+            position: absolute; top: 15px; left: 15px; z-index: 1000;
+            background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(5px);
+            padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);
+            display: flex; flex-direction: column; gap: 8px; width: 220px;
         }
-        input { flex: 1; padding: 10px; border-radius: 8px; border: none; background: #222; color: #fff; font-size: 16px; }
-        button { padding: 10px 20px; border-radius: 8px; border: none; background: #00ffff; color: #000; font-weight: bold; cursor: pointer; }
+        input { padding: 8px; border-radius: 5px; border: none; background: rgba(0,0,0,0.5); color: #fff; }
+        button { padding: 8px; border-radius: 5px; border: none; background: #00ffff; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <input type="text" id="textInput" placeholder="請輸入文字..." value="穿壁而出 右轉沒入">
-    <button id="updateBtn">更新</button>
+<div id="app-ui">
+    <input type="text" id="textInput" value="新宿3D貓咪視角測試">
+    <button id="updateBtn">更新內容</button>
 </div>
 
 <script type="importmap">
@@ -29,11 +30,12 @@
 <script type="module">
     import * as THREE from 'three';
 
-    class ShoesBoxApp {
+    class ShinjukuApp {
         constructor() {
-            this.config = { speed: 0.07, depth: 50, fontSize: 320, color: "#00ffcc" };
+            this.config = { speed: 0.05, depth: 45, fontSize: 320, color: "#00ffcc" };
             this.scene = new THREE.Scene();
-            this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // 廣角鏡頭，模擬拍照感
+            this.camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 1000);
             this.renderer = new THREE.WebGLRenderer({ antialias: true });
             this.charGroups = [];
             this.init();
@@ -45,10 +47,10 @@
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(this.renderer.domElement);
 
-            // --- 妳要求的「鞋盒底部仰望」視角 ---
-            // 相機放在底部中心，往上方(Y+)與深處(Z-)仰望
-            this.camera.position.set(0, -30, 5); 
-            this.camera.lookAt(0, 5, -20); 
+            // --- 視角修正：完全模仿妳照片中的拍攝站位 ---
+            // 相機在右前方 (x=45, z=60)，高度適中 (y=25)
+            this.camera.position.set(45, 25, 60); 
+            this.camera.lookAt(-10, 0, -10); // 鏡頭焦點對準轉折處
 
             this.scene.add(new THREE.AmbientLight(0xffffff, 4));
             this.update();
@@ -91,28 +93,28 @@
                     const color = new THREE.Color(this.config.color);
                     const hsl = {};
                     color.getHSL(hsl);
-                    if (j > 0) hsl.l *= (0.1 + 0.5 * Math.pow(1 - j/this.config.depth, 1.5));
+                    if (j > 0) hsl.l *= (0.15 + 0.45 * Math.pow(1 - j/this.config.depth, 1.5));
                     else hsl.l = 1.0;
                     color.setHSL(hsl.h, hsl.s, hsl.l);
 
                     const mat = new THREE.MeshBasicMaterial({ 
-                        map: tex, transparent: true, color: color, alphaTest: 0.2, side: THREE.DoubleSide
+                        map: tex, transparent: true, color: color, alphaTest: 0.15, side: THREE.DoubleSide
                     });
                     const m = new THREE.Mesh(geometry, mat);
-                    m.position.z = -(j * 0.1); 
-                    if (j === 0) m.scale.set(1.1, 1.1, 1);
+                    m.position.z = -(j * 0.08); 
+                    if (j === 0) m.scale.set(1.05, 1.05, 1);
                     group.add(m);
                 }
 
-                // 起點：遠端牆面 (Z 軸深處)
-                const spacing = 8;
+                // 起點：右方牆壁深處
+                const spacing = 7;
                 group.userData = { 
                     angle: 0, 
-                    state: 'long-wall', 
-                    xStart: 18, // 右側牆壁
-                    zStart: -70 - (i * spacing) 
+                    state: 'right-wall', 
+                    xStart: 60 + (i * spacing), 
+                    zStart: 0 
                 };
-                group.position.set(group.userData.xStart, 5, group.userData.zStart);
+                group.position.set(group.userData.xStart, 0, group.userData.zStart);
                 this.scene.add(group);
                 this.charGroups.push(group);
             });
@@ -120,42 +122,43 @@
 
         animate() {
             requestAnimationFrame(() => this.animate());
-            const R = 18; 
-            const turnZ = 15; // 靠近使用者的轉折點
+            const R = 22; // 轉彎半徑
+            const cornerX = 0; 
 
             this.charGroups.forEach(g => {
                 let s = this.config.speed;
 
-                if (g.userData.state === 'long-wall') {
-                    g.position.z += s; 
-                    if (g.position.z >= turnZ) g.userData.state = 'turning';
+                if (g.userData.state === 'right-wall') {
+                    g.position.x -= s; 
+                    if (g.position.x <= cornerX) g.userData.state = 'turning';
                 } else if (g.userData.state === 'turning') {
-                    g.userData.angle += (s / R);
+                    const slow = 1 - (Math.sin(g.userData.angle) * 0.5);
+                    g.userData.angle += (s * slow / R);
                     if (g.userData.angle < Math.PI / 2) {
-                        g.position.z = turnZ + R * Math.sin(g.userData.angle);
-                        g.position.x = 18 - R + R * Math.cos(g.userData.angle);
-                        g.rotation.y = g.userData.angle;
+                        g.position.x = cornerX - R * Math.sin(g.userData.angle);
+                        g.position.z = g.userData.zStart - R + R * Math.cos(g.userData.angle);
+                        g.rotation.y = -g.userData.angle;
                     } else {
-                        g.userData.state = 'other-long-wall';
+                        g.userData.state = 'left-wall';
                     }
                 } else {
-                    g.position.x -= s; // 沒入另一側牆
+                    g.position.z -= s; 
                 }
 
-                if (g.position.x < -45) {
-                    g.userData.state = 'long-wall';
+                if (g.position.z < -100) {
+                    g.userData.state = 'right-wall';
                     g.userData.angle = 0;
                     g.rotation.y = 0;
-                    // 自動排到最後一個字後面重生
-                    const lastZ = Math.min(...this.charGroups.map(ch => ch.position.z));
-                    g.position.set(18, 5, lastZ - 8);
+                    // 自動循環
+                    const maxCharX = Math.max(...this.charGroups.map(ch => ch.position.x), 50);
+                    g.position.set(maxCharX + 7, 0, 0);
                 }
             });
             this.renderer.render(this.scene, this.camera);
         }
     }
 
-    const app = new ShoesBoxApp();
+    const app = new ShinjukuApp();
     document.getElementById('updateBtn').onclick = () => app.update();
 </script>
 </body>
