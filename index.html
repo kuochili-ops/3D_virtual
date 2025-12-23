@@ -2,163 +2,133 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>3D 裸眼看板模擬 App</title>
+    <title>純 3D 向量立體中文跑馬燈</title>
     <style>
-        body { margin: 0; background-color: #050505; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; }
-        #ui-layer {
-            position: absolute; top: 20px; left: 20px; z-index: 100;
-            background: rgba(0,0,0,0.7); padding: 15px; border-radius: 10px; border: 1px solid #444;
-        }
-        input { padding: 8px; border: none; border-radius: 4px; width: 180px; outline: none; }
-        button { padding: 8px 15px; background: #00ffff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        button:hover { background: #00cccc; }
-        .label { color: white; font-size: 12px; margin-bottom: 5px; display: block; }
+        body { margin: 0; background-color: #000; overflow: hidden; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: white; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; }
+        input { padding: 5px; }
     </style>
 </head>
 <body>
-
-    <div id="ui-layer">
-        <span class="label">輸入跑馬燈文字：</span>
-        <input type="text" id="textInput" value="限時優惠 3D 看板" placeholder="輸入中文...">
-        <button id="updateBtn">更新</button>
+    <div id="ui">
+        <input type="text" id="textInput" value="立體" placeholder="輸入中文...">
+        <button id="updateBtn">生成 3D 字</button>
+        <div style="font-size: 12px; margin-top: 5px; color: #0ff;">此模式將文字轉為 3D 向量模型 (真正的側邊厚度)</div>
     </div>
 
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
             }
         }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
-        // --- 1. 初始化環境 ---
+        // --- 1. 環境設定 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(15, 10, 20); // 模擬街頭仰視角
+        camera.position.set(12, 8, 15);
         camera.lookAt(0, 3, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x050505);
         document.body.appendChild(renderer.domElement);
 
-        // 光源
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        directionalLight.position.set(10, 20, 10);
-        scene.add(directionalLight);
+        // 強光才能顯現側面的金屬感/立體感
+        const light = new THREE.DirectionalLight(0xffffff, 2);
+        light.position.set(5, 10, 7);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-        // --- 2. 建立看板環境與遮罩「門」 ---
-        // 建立一個隱形的遮罩牆，讓文字右轉後「消失」
-        const maskGeo = new THREE.PlaneGeometry(10, 10);
-        const maskMat = new THREE.MeshBasicMaterial({ color: 0x050505 }); // 與背景色相同
-        const maskWall = new THREE.Mesh(maskGeo, maskMat);
-        maskWall.position.set(-10, 3, 0); // 放在轉彎處的後方
-        maskWall.rotation.y = Math.PI / 2;
-        scene.add(maskWall);
+        // --- 2. 解決中文字體關鍵：加載中文字體 JSON ---
+        // 註：這是一個包含常用中文路徑的字體庫，若檔案較大請稍候
+        const loader = new FontLoader();
+        let currentFont;
+        let charMeshes = [];
 
-        // --- 3. 跑馬燈字元模組 ---
-        class CharBlock {
-            constructor(char, index, total) {
-                this.char = char;
-                this.spacing = 2.5; // 字距
-                this.speed = 0.06;
-                this.turnPointX = -5; // 到達這個 X 點就轉彎
-                
-                // 初始位置：從右側遠處排隊出現
-                this.initX = 15 + (index * this.spacing);
-                this.mesh = this.createMesh(char);
-                this.mesh.position.set(this.initX, 4, 3);
-                scene.add(this.mesh);
-            }
+        // 這裡使用一個開源的繁體中文字體 JSON (Microsoft JhengHei 轉製)
+        const CHINESE_FONT_URL = 'https://raw.githubusercontent.com/Ken-Yamanaka/three.js-chinese-font/master/fonts/MicrosoftJhengHei_Regular.json';
 
-            createMesh(char) {
-                const canvas = document.createElement('canvas');
-                canvas.width = 256; canvas.height = 256;
-                const ctx = canvas.getContext('2d');
-                
-                // 繪製背景與發光中文
-                ctx.fillStyle = '#111';
-                ctx.fillRect(0, 0, 256, 256);
-                ctx.fillStyle = '#00ffff';
-                ctx.font = 'bold 160px "Microsoft JhengHei"';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(char, 128, 128);
+        loader.load(CHINESE_FONT_URL, (font) => {
+            currentFont = font;
+            createMarquee("立體厚度");
+            animate();
+        });
 
-                const texture = new THREE.CanvasTexture(canvas);
-                const geometry = new THREE.BoxGeometry(2, 2, 0.6); // 0.6 是立體厚度
-                
-                // 6 個面：正面貼文字，其餘面給藍色邊框色
-                const sideMat = new THREE.MeshPhongMaterial({ color: 0x0066aa });
-                const faceMat = new THREE.MeshPhongMaterial({ map: texture });
-                
-                return new THREE.Mesh(geometry, [sideMat, sideMat, sideMat, sideMat, faceMat, sideMat]);
-            }
+        // --- 3. 逐字生成立體幾何體 ---
+        function createMarquee(text) {
+            charMeshes.forEach(m => scene.remove(m));
+            charMeshes = [];
 
-            update() {
-                // 移動邏輯
-                if (this.mesh.position.x > this.turnPointX) {
-                    // 直行階段
-                    this.mesh.position.x -= this.speed;
-                } else {
-                    // 轉彎階段
-                    if (this.mesh.rotation.y > -Math.PI / 2) {
-                        this.mesh.rotation.y -= 0.1; // 旋轉向內
-                    }
-                    this.mesh.position.z -= this.speed * 1.5; // 往門內走
-                }
-
-                // 循環重置
-                if (this.mesh.position.z < -10) {
-                    this.mesh.position.set(15, 4, 3);
-                    this.mesh.rotation.y = 0;
-                }
-            }
-
-            destroy() {
-                scene.remove(this.mesh);
-                this.mesh.geometry.dispose();
-                this.mesh.material.forEach(m => m.dispose());
-            }
-        }
-
-        // --- 4. 管理器 ---
-        let charObjects = [];
-        function startMarquee(text) {
-            charObjects.forEach(obj => obj.destroy());
-            charObjects = [];
             const chars = text.split('');
-            chars.forEach((c, i) => {
-                charObjects.push(new CharBlock(c, i, chars.length));
+            chars.forEach((char, i) => {
+                const geometry = new TextGeometry(char, {
+                    font: currentFont,
+                    size: 2,
+                    height: 0.8,         // 這裡就是真正的文字厚度！
+                    curveSegments: 4,    // 減少面數提升效能
+                    bevelEnabled: true,  // 倒角增加光影細節
+                    bevelThickness: 0.1,
+                    bevelSize: 0.05
+                });
+
+                // 讓每個字元的重心居中
+                geometry.computeBoundingBox();
+                
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: 0x00ffff, 
+                    specular: 0xffffff, 
+                    shininess: 100 
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                // 初始排隊位置
+                mesh.position.set(10 + (i * 3), 3, 2);
+                scene.add(mesh);
+                charMeshes.push({
+                    mesh: mesh,
+                    state: 'linear' // linear 或 turning
+                });
             });
         }
 
-        // --- 5. 渲染循環 ---
+        // --- 4. 動畫邏輯 ---
         function animate() {
             requestAnimationFrame(animate);
-            charObjects.forEach(obj => obj.update());
+            
+            charMeshes.forEach((item, i) => {
+                const m = item.mesh;
+                
+                if (m.position.x > -5) {
+                    m.position.x -= 0.06;
+                } else {
+                    // 轉彎動畫：旋轉 + 深度位移
+                    if (m.rotation.y > -Math.PI / 2) {
+                        m.rotation.y -= 0.1;
+                    }
+                    m.position.z -= 0.08;
+                }
+
+                // 循環重置
+                if (m.position.z < -10) {
+                    m.position.set(10 + (charMeshes.length * 0.5), 3, 2);
+                    m.rotation.y = 0;
+                }
+            });
+
             renderer.render(scene, camera);
         }
 
-        // 監聽按鈕與縮放
         document.getElementById('updateBtn').onclick = () => {
-            startMarquee(document.getElementById('textInput').value);
+            if(currentFont) createMarquee(document.getElementById('textInput').value);
         };
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // 啟動
-        startMarquee("立體跑馬燈中文");
-        animate();
     </script>
 </body>
 </html>
