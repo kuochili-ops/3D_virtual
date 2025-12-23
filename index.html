@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR Studio - Flow Fix</title>
+    <title>AR Studio - Perfect Flow</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #video-bg { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 1; }
@@ -12,18 +12,17 @@
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
             background: linear-gradient(transparent, rgba(0,0,0,0.9));
-            padding: 25px 20px; display: flex; flex-direction: column; align-items: center; gap: 15px;
+            padding: 25px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px;
             box-sizing: border-box;
         }
         .control-group { width: 100%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; }
-        input[type="text"] { background: rgba(255,255,255,0.15); border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 8px; width: 65%; font-size: 16px; }
+        input[type="text"] { background: rgba(255,255,255,0.2); border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 8px; width: 65%; font-size: 16px; }
         
         #rec-btn {
             width: 70px; height: 70px; border-radius: 50%; border: 5px solid #fff;
-            background: red; cursor: pointer; display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 15px rgba(255,0,0,0.5);
+            background: red; cursor: pointer; transition: all 0.2s;
         }
-        #rec-btn.active { border-radius: 15px; transform: scale(0.85); background: #fff; box-shadow: 0 0 20px #fff; }
+        #rec-btn.active { border-radius: 15px; transform: scale(0.8); background: #fff; }
         
         .small-btn { background: #00ffff; color: #000; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; font-size: 12px; }
     </style>
@@ -35,15 +34,15 @@
 
 <div id="app-ui">
     <div class="control-group">
-        <input type="text" id="textInput" value="MERCEDES-BENZ">
+        <input type="text" id="textInput" value="愛到你心驚驚">
         <button class="small-btn" id="toggleGuide">隱藏路徑球</button>
     </div>
     <div class="control-group">
-        <span style="color: #00ffff; font-size: 11px;">流速調整</span>
+        <span style="color: #00ffff; font-size: 11px;">慢速 ←→ 快速</span>
         <input type="range" id="speedSlider" min="1" max="50" value="8" style="width: 70%; accent-color: #00ffff;">
     </div>
     <div id="rec-btn"></div>
-    <button id="startCam" style="background:none; border:none; color:#aaa; font-size:11px; margin-top:5px; text-decoration:underline;">點擊授權相機權限</button>
+    <button id="startCam" style="background:none; border:none; color:#aaa; font-size:11px; margin-top:5px;">[ 點擊啟動相機 ]</button>
 </div>
 
 <script type="importmap">
@@ -59,7 +58,7 @@
     import * as THREE from 'three';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARFlowApp {
+    class ARPerfectApp {
         constructor() {
             this.config = { speed: 0.0008, showGuides: true };
             this.scene = new THREE.Scene();
@@ -75,14 +74,13 @@
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.setPixelRatio(window.devicePixelRatio);
             document.getElementById('three-canvas').appendChild(this.renderer.domElement);
-            this.camera.position.set(0, 10, 150);
+            this.camera.position.set(0, 15, 150);
             this.scene.add(new THREE.AmbientLight(0xffffff, 5));
 
-            // 重設路徑點：P0 在右，P2 在左
             this.points = [
-                this.createPoint(new THREE.Vector3(60, 0, -20)),  // 起點 (右)
-                this.createPoint(new THREE.Vector3(0, 0, 15)),    // 轉向中點
-                this.createPoint(new THREE.Vector3(-60, 0, -20))  // 終點 (左)
+                this.createPoint(new THREE.Vector3(70, 0, -30)),  // 右起點
+                this.createPoint(new THREE.Vector3(0, 0, 10)),    // 中間點
+                this.createPoint(new THREE.Vector3(-70, 0, -30)) // 左終點
             ];
 
             const drag = new DragControls(this.points, this.camera, this.renderer.domElement);
@@ -123,16 +121,21 @@
             this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
             const text = document.getElementById('textInput').value || "";
-            text.split('').forEach((c, i) => {
+            
+            // 關鍵：將文字順序反轉，讓第一個字出現在路徑最前方
+            const chars = text.split('').reverse(); 
+
+            chars.forEach((c, i) => {
                 const g = new THREE.Group();
                 const tex = this.createTexture(c);
                 for (let j = 0; j < 35; j++) {
-                    const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.2, side: THREE.DoubleSide }));
+                    const m = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.2, side: THREE.DoubleSide }));
                     m.position.z = -j * 0.15;
                     m.material.color.setScalar(0.4 + 0.6 * (1 - j/35));
                     g.add(m);
                 }
-                g.userData.tOffset = i * 0.16;
+                // 反轉後的 i 剛好對應從右到左的間距
+                g.userData.tOffset = i * 0.18; 
                 this.scene.add(g);
                 this.charGroups.push(g);
             });
@@ -150,14 +153,13 @@
             requestAnimationFrame(() => this.animate());
             const time = Date.now() * this.config.speed;
             this.charGroups.forEach(g => {
-                // 修改流向邏輯：讓 t 從 0 (右) 增加到 1 (左)
-                let t = (time + g.userData.tOffset) % 1.6 - 0.3; 
+                // 流向邏輯：文字從 t=0 (右) 出現，流向 t=1 (左)
+                let t = (time + g.userData.tOffset) % 1.8 - 0.4; 
                 
                 if (t >= 0 && t <= 1) {
                     const pos = this.curve.getPointAt(t);
                     const tangent = this.curve.getTangentAt(t).normalize();
                     g.position.copy(pos);
-                    // 頭部朝向切線方向 (t 增加的方向)
                     g.lookAt(pos.clone().add(tangent));
                     g.rotateY(Math.PI / 2);
                     g.visible = true;
@@ -171,14 +173,16 @@
             if (!this.recorder || this.recorder.state === "inactive") {
                 this.chunks = [];
                 const stream = this.renderer.domElement.captureStream(30);
-                const type = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+                const types = ['video/webm;codecs=vp9', 'video/webm', 'video/mp4'];
+                let type = types.find(t => MediaRecorder.isTypeSupported(t)) || 'video/webm';
+                
                 this.recorder = new MediaRecorder(stream, { mimeType: type });
                 this.recorder.ondataavailable = e => this.chunks.push(e.data);
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: type });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
-                    a.href = url; a.download = 'mercedes_ar.' + (type.includes('mp4') ? 'mp4' : 'webm');
+                    a.href = url; a.download = 'ar_video.' + (type.includes('mp4') ? 'mp4' : 'webm');
                     a.click();
                 };
                 this.recorder.start();
@@ -189,7 +193,7 @@
             }
         }
     }
-    new ARFlowApp();
+    new ARPerfectApp();
 </script>
 </body>
 </html>
