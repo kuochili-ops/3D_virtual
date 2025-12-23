@@ -3,13 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Anamorphic Billboard</title>
+    <title>3D 鞋盒仰望看板 App</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
-        /* 隱藏所有介面，專注於 3D 效果 */
+        #ui {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 100; background: rgba(0, 0, 0, 0.8); padding: 12px; border-radius: 15px;
+            display: flex; gap: 10px; border: 1px solid #00ffff; width: 90%; max-width: 400px;
+        }
+        input { flex: 1; padding: 10px; border-radius: 8px; border: none; background: #222; color: #fff; font-size: 16px; }
+        button { padding: 10px 20px; border-radius: 8px; border: none; background: #00ffff; color: #000; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
+
+<div id="ui">
+    <input type="text" id="textInput" placeholder="請輸入文字..." value="穿壁而出 右轉沒入">
+    <button id="updateBtn">更新</button>
+</div>
 
 <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -18,20 +29,13 @@
 <script type="module">
     import * as THREE from 'three';
 
-    class ShinjukuVisionApp {
+    class ShoesBoxApp {
         constructor() {
-            this.config = {
-                text: "新宿裸眼3D視覺錯視看板效果",
-                color: "#00ffcc",
-                speed: 0.05,
-                depth: 50, // 增加厚度強化轉彎時的側邊視覺
-                fontSize: 300
-            };
+            this.config = { speed: 0.07, depth: 50, fontSize: 320, color: "#00ffcc" };
             this.scene = new THREE.Scene();
-            this.camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000);
+            this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
             this.renderer = new THREE.WebGLRenderer({ antialias: true });
             this.charGroups = [];
-            
             this.init();
             this.animate();
         }
@@ -41,19 +45,24 @@
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(this.renderer.domElement);
 
-            // --- 關鍵：鎖定照片中的拍攝角度 ---
-            // x:45 (右側), y:35 (上方俯瞰), z:60 (遠距離產生廣角感)
-            this.camera.position.set(45, 35, 60);
-            this.camera.lookAt(-5, 5, 0); // 鏡頭對準轉角中心
+            // --- 妳要求的「鞋盒底部仰望」視角 ---
+            // 相機放在底部中心，往上方(Y+)與深處(Z-)仰望
+            this.camera.position.set(0, -30, 5); 
+            this.camera.lookAt(0, 5, -20); 
 
-            this.scene.add(new THREE.AmbientLight(0xffffff, 3.5));
-            this.buildBoard();
+            this.scene.add(new THREE.AmbientLight(0xffffff, 4));
+            this.update();
 
             window.addEventListener('resize', () => {
                 this.camera.aspect = window.innerWidth / window.innerHeight;
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
             });
+        }
+
+        update() {
+            const text = document.getElementById('textInput').value || " ";
+            this.buildBoard(text);
         }
 
         createTexture(char) {
@@ -68,10 +77,10 @@
             return new THREE.CanvasTexture(canvas);
         }
 
-        buildBoard() {
+        buildBoard(text) {
             this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
-            const chars = this.config.text.split('');
+            const chars = text.split('');
             const geometry = new THREE.PlaneGeometry(8, 8);
 
             chars.forEach((c, i) => {
@@ -82,29 +91,28 @@
                     const color = new THREE.Color(this.config.color);
                     const hsl = {};
                     color.getHSL(hsl);
-                    if (j > 0) {
-                        hsl.l *= (0.1 + 0.4 * Math.pow(1 - j/this.config.depth, 1.5));
-                    } else { hsl.l = 1.0; }
+                    if (j > 0) hsl.l *= (0.1 + 0.5 * Math.pow(1 - j/this.config.depth, 1.5));
+                    else hsl.l = 1.0;
                     color.setHSL(hsl.h, hsl.s, hsl.l);
 
                     const mat = new THREE.MeshBasicMaterial({ 
-                        map: tex, transparent: true, color: color, alphaTest: 0.15
+                        map: tex, transparent: true, color: color, alphaTest: 0.2, side: THREE.DoubleSide
                     });
                     const m = new THREE.Mesh(geometry, mat);
-                    m.position.z = -(j * 0.08); 
+                    m.position.z = -(j * 0.1); 
                     if (j === 0) m.scale.set(1.1, 1.1, 1);
                     group.add(m);
                 }
 
-                const spacing = 7;
-                // 設定起點在右側牆壁深處
+                // 起點：遠端牆面 (Z 軸深處)
+                const spacing = 8;
                 group.userData = { 
                     angle: 0, 
-                    state: 'right-wall', 
-                    xStart: 60 + (i * spacing), 
-                    zStart: 0 
+                    state: 'long-wall', 
+                    xStart: 18, // 右側牆壁
+                    zStart: -70 - (i * spacing) 
                 };
-                group.position.set(group.userData.xStart, 6, group.userData.zStart);
+                group.position.set(group.userData.xStart, 5, group.userData.zStart);
                 this.scene.add(group);
                 this.charGroups.push(group);
             });
@@ -112,43 +120,43 @@
 
         animate() {
             requestAnimationFrame(() => this.animate());
-            const R = 25; // 轉彎半徑加大，模仿照片中貓咪跨越轉角的弧度
-            const cornerX = 0;
+            const R = 18; 
+            const turnZ = 15; // 靠近使用者的轉折點
 
             this.charGroups.forEach(g => {
                 let s = this.config.speed;
 
-                if (g.userData.state === 'right-wall') {
-                    g.position.x -= s;
-                    if (g.position.x <= cornerX) g.userData.state = 'turning';
+                if (g.userData.state === 'long-wall') {
+                    g.position.z += s; 
+                    if (g.position.z >= turnZ) g.userData.state = 'turning';
                 } else if (g.userData.state === 'turning') {
-                    const slow = 1 - (Math.sin(g.userData.angle) * 0.5);
-                    g.userData.angle += (s * slow / R);
-                    
+                    g.userData.angle += (s / R);
                     if (g.userData.angle < Math.PI / 2) {
-                        // 旋轉動線：從 X-Z 平面轉向 Z-X 平面
-                        g.position.x = cornerX - R * Math.sin(g.userData.angle);
-                        g.position.z = g.userData.zStart - R + R * Math.cos(g.userData.angle);
-                        g.rotation.y = -g.userData.angle;
+                        g.position.z = turnZ + R * Math.sin(g.userData.angle);
+                        g.position.x = 18 - R + R * Math.cos(g.userData.angle);
+                        g.rotation.y = g.userData.angle;
                     } else {
-                        g.userData.state = 'left-wall';
+                        g.userData.state = 'other-long-wall';
                     }
                 } else {
-                    g.position.z -= s; // 往左側遠方遊走
+                    g.position.x -= s; // 沒入另一側牆
                 }
 
-                if (g.position.z < -100) {
-                    g.userData.state = 'right-wall';
+                if (g.position.x < -45) {
+                    g.userData.state = 'long-wall';
                     g.userData.angle = 0;
                     g.rotation.y = 0;
-                    g.position.set(g.userData.xStart, 6, g.userData.zStart);
+                    // 自動排到最後一個字後面重生
+                    const lastZ = Math.min(...this.charGroups.map(ch => ch.position.z));
+                    g.position.set(18, 5, lastZ - 8);
                 }
             });
             this.renderer.render(this.scene, this.camera);
         }
     }
 
-    new ShinjukuVisionApp();
+    const app = new ShoesBoxApp();
+    document.getElementById('updateBtn').onclick = () => app.update();
 </script>
 </body>
 </html>
