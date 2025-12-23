@@ -3,33 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 極光看板 最終正式版</title>
+    <title>3D 極光看板 (清晰強化版)</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; font-family: 'PingFang TC', sans-serif; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #ui {
             position: absolute; top: 10px; left: 10px; z-index: 100;
             background: rgba(0, 0, 0, 0.9); padding: 15px; border-radius: 12px; color: white;
-            border: 1px solid #444; width: 240px; box-shadow: 0 4px 20px rgba(0,255,255,0.2);
+            border: 1px solid #00ffff; width: 240px;
         }
         .row { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
-        input[type="text"] { width: 130px; padding: 5px; background: #1a1a1a; border: 1px solid #444; color: white; border-radius: 4px; }
-        input[type="range"] { width: 110px; cursor: pointer; }
+        input[type="text"] { width: 140px; padding: 5px; background: #1a1a1a; border: 1px solid #444; color: white; }
+        input[type="range"] { width: 110px; }
         button { 
             width: 100%; padding: 10px; margin-top: 5px; background: #00ffff; 
             border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: #000;
-            transition: 0.2s;
         }
-        button:active { transform: scale(0.98); background: #00cccc; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div class="row">文字內容 <input type="text" id="textInput" value="模擬百貨公司大樓外牆看板"></div>
-    <div class="row">極光主色 <input type="color" id="colorPicker" value="#00ffcc"></div>
-    <div class="row">前進速度 <input type="range" id="speedSlider" min="0.01" max="0.1" step="0.01" value="0.04"></div>
-    <div class="row">立體厚度 <input type="range" id="depthSlider" min="10" max="80" step="5" value="40"></div>
-    <button id="updateBtn">套用變更</button>
+    <div class="row">文字 <input type="text" id="textInput" value="百貨公司大樓外牆"></div>
+    <div class="row">顏色 <input type="color" id="colorPicker" value="#00ffff"></div>
+    <div class="row">速度 <input type="range" id="speedSlider" min="0.01" max="0.1" step="0.01" value="0.04"></div>
+    <div class="row">字體 <input type="range" id="fontSlider" min="150" max="400" step="10" value="300"></div>
+    <div class="row">厚度 <input type="range" id="depthSlider" min="10" max="80" step="5" value="40"></div>
+    <button id="updateBtn">重新生成看板</button>
 </div>
 
 <script type="importmap">
@@ -41,12 +40,11 @@
 
     class FlipBoardApp {
         constructor() {
-            this.config = { text: "", startColor: "", baseSpeed: 0.04, radius: 15, depth: 40 };
+            this.config = { text: "", startColor: "", baseSpeed: 0.04, radius: 15, depth: 40, fontSize: 300 };
             this.scene = new THREE.Scene();
-            this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 500);
-            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            this.camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 500);
+            this.renderer = new THREE.WebGLRenderer({ antialias: true });
             this.charGroups = [];
-            
             this.init();
             this.animate();
         }
@@ -55,13 +53,9 @@
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(this.renderer.domElement);
-            
-            this.camera.position.set(30, 25, 45);
+            this.camera.position.set(25, 20, 45); // 稍微拉近相機
             this.camera.lookAt(0, 5, 0);
-
-            // 環境光增強金屬質感
-            this.scene.add(new THREE.AmbientLight(0xffffff, 2.5));
-            
+            this.scene.add(new THREE.AmbientLight(0xffffff, 3));
             this.update();
             window.addEventListener('resize', () => {
                 this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -74,32 +68,28 @@
             this.config.text = document.getElementById('textInput').value || " ";
             this.config.startColor = document.getElementById('colorPicker').value;
             this.config.baseSpeed = parseFloat(document.getElementById('speedSlider').value);
+            this.config.fontSize = parseInt(document.getElementById('fontSlider').value);
             this.config.depth = parseInt(document.getElementById('depthSlider').value);
             this.buildBoard();
         }
 
-        // 建立高解析度文字貼圖
         createTexture(char) {
             const res = 512;
             const canvas = document.createElement('canvas');
             canvas.width = res; canvas.height = res;
             const ctx = canvas.getContext('2d');
             
-            // 文字自動縮放邏輯
-            const fontSize = Math.min(280, (res / this.config.text.length) * 1.2);
-            ctx.font = `bold ${fontSize}px sans-serif`;
-            ctx.textAlign = 'center'; 
-            ctx.textBaseline = 'middle';
+            // 強制放大字體，不受總長度影響過大
+            ctx.font = `bold ${this.config.fontSize}px sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             
-            // 繪製主體
+            // 繪製白色主體
             ctx.fillStyle = "white"; 
             ctx.fillText(char, res/2, res/2);
-            
             return new THREE.CanvasTexture(canvas);
         }
 
         buildBoard() {
-            // 釋放舊資源防止崩潰
             this.charGroups.forEach(g => {
                 g.children.forEach(c => {
                     c.material.map.dispose();
@@ -110,7 +100,7 @@
             this.charGroups = [];
 
             const chars = this.config.text.split('');
-            const geometry = new THREE.PlaneGeometry(4, 4);
+            const geometry = new THREE.PlaneGeometry(6, 6); // 稍微放大 Plane 尺寸
 
             chars.forEach((c, i) => {
                 const group = new THREE.Group();
@@ -121,38 +111,26 @@
                     const hsl = {};
                     color.getHSL(hsl);
                     
-                    // 色彩漸變邏輯：正面亮白，側面帶色相偏移並漸暗
                     if (j > 0) {
-                        hsl.h += (j / this.config.depth) * 0.12;
-                        hsl.l *= (0.15 + 0.45 * Math.pow(1 - j/this.config.depth, 1.5));
+                        hsl.h += (j / this.config.depth) * 0.1;
+                        hsl.l *= (0.1 + 0.45 * Math.pow(1 - j/this.config.depth, 1.5));
                     } else {
-                        hsl.l = 0.98; // 正面幾乎純白，確保清晰
+                        hsl.l = 1.0; // 第一層純白
                     }
                     color.setHSL(hsl.h, hsl.s, hsl.l);
 
                     const mat = new THREE.MeshBasicMaterial({ 
-                        map: tex, 
-                        transparent: true, 
-                        color: color,
-                        alphaTest: 0.1, // 修正透明破碎感
-                        side: THREE.DoubleSide
+                        map: tex, transparent: true, color: color, alphaTest: 0.1
                     });
-                    
                     const m = new THREE.Mesh(geometry, mat);
-                    m.position.z = -(j * 0.07); // 紮實的層距
-                    
-                    // 正面稍微放大，增加邊框感
-                    if (j === 0) m.scale.set(1.05, 1.05, 1);
-                    
+                    m.position.z = -(j * 0.06); 
+                    if (j === 0) m.scale.set(1.1, 1.1, 1); // 讓正面稍微突出
                     group.add(m);
                 }
 
-                const spacing = 4.8;
-                // 隨機重生位置
-                const randomZ = (Math.random() - 0.5) * 4;
-                group.userData = { angle: 0, state: 'straight', xStart: 35 + (i * spacing), zStart: randomZ };
+                const spacing = this.config.fontSize / 50; // 動態計算字距
+                group.userData = { angle: 0, state: 'straight', xStart: 30 + (i * spacing), zStart: (Math.random()-0.5)*3 };
                 group.position.set(group.userData.xStart, 6, group.userData.zStart);
-                
                 this.scene.add(group);
                 this.charGroups.push(group);
             });
@@ -160,46 +138,32 @@
 
         animate() {
             requestAnimationFrame(() => this.animate());
-            const R = this.config.radius;
-            const turnX = 0;
-
+            const R = 15;
             this.charGroups.forEach(g => {
                 let s = this.config.baseSpeed;
-
-                if (g.position.x > turnX && g.userData.state === 'straight') {
+                if (g.position.x > 0 && g.userData.state === 'straight') {
                     g.position.x -= s;
                 } else if (g.userData.state !== 'done') {
                     g.userData.state = 'turning';
-                    // 物理漸進減速
-                    const slow = 1 - (Math.sin(g.userData.angle) * 0.55);
+                    const slow = 1 - (Math.sin(g.userData.angle) * 0.6);
                     g.userData.angle += (s * slow / R);
-                    
                     if (g.userData.angle < Math.PI / 2) {
-                        g.position.x = turnX - R * Math.sin(g.userData.angle);
+                        g.position.x = -R * Math.sin(g.userData.angle);
                         g.position.z = g.userData.zStart - R + R * Math.cos(g.userData.angle);
-                        // 旋轉
                         g.rotation.y = -g.userData.angle;
-                    } else {
-                        g.userData.state = 'done';
-                    }
+                    } else { g.userData.state = 'done'; }
                 } else {
                     g.position.z -= s;
                 }
-
-                // 循環重生
                 if (g.position.z < -65) {
-                    g.userData.angle = 0;
-                    g.userData.state = 'straight';
-                    g.rotation.y = 0;
-                    g.userData.zStart = (Math.random() - 0.5) * 4;
                     g.position.set(g.userData.xStart, 6, g.userData.zStart);
+                    g.rotation.y = 0; g.userData.angle = 0; g.userData.state = 'straight';
                 }
             });
             this.renderer.render(this.scene, this.camera);
         }
     }
 
-    // 啟動 App
     const app = new FlipBoardApp();
     document.getElementById('updateBtn').onclick = () => app.update();
 </script>
