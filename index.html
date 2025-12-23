@@ -2,208 +2,193 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>3D 極光甩尾看板 App</title>
+    <title>3D 極光甩尾看板 Pro</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #ui {
-            position: absolute; top: 20px; left: 20px; z-index: 100;
-            background: rgba(0,0,0,0.85); padding: 20px; border-radius: 12px; color: white;
-            border: 1px solid #444; width: 280px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            position: absolute; top: 15px; left: 15px; z-index: 100;
+            background: rgba(10, 10, 10, 0.9); padding: 18px; border-radius: 10px; color: white;
+            border: 1px solid #333; width: 300px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
-        .row { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
-        input[type="text"] { width: 180px; padding: 6px; background: #222; border: 1px solid #555; color: white; border-radius: 4px; }
-        input[type="range"] { width: 150px; }
+        .row { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+        input[type="text"] { width: 170px; padding: 5px; background: #1a1a1a; border: 1px solid #444; color: white; }
+        input[type="range"] { width: 150px; cursor: pointer; }
         button { 
             width: 100%; padding: 10px; margin-top: 10px; background: #00ffff; 
-            border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: #000;
-            transition: 0.3s;
+            border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: #000;
         }
-        button:hover { background: #00cccc; transform: translateY(-2px); }
-        .status { font-size: 11px; color: #888; margin-top: 10px; text-align: center; }
+        button:hover { background: #00d9d9; }
+        .label-val { color: #00ffff; font-family: monospace; }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <div class="row">文字 <input type="text" id="textInput" value="基隆市府安排免費接駁車"></div>
-        <div class="row">主色 <input type="color" id="colorPicker" value="#00ffff"></div>
-        <div class="row">速度 <input type="range" id="speedSlider" min="0.01" max="0.1" step="0.01" value="0.04"></div>
-        <div class="row">半徑 <input type="range" id="radiusSlider" min="5" max="25" step="1" value="12"></div>
-        <button id="updateBtn">重新載入看板</button>
-        <div class="status">模式：極光感 + 漸進過彎減速</div>
-    </div>
+<div id="ui">
+    <div class="row">文字內容 <input type="text" id="textInput" value="基隆市府安排免費接駁車"></div>
+    <div class="row">極光主色 <input type="color" id="colorPicker" value="#00ffff"></div>
+    <div class="row">基本速度 <input type="range" id="speedSlider" min="0.01" max="0.1" step="0.005" value="0.04"></div>
+    <div class="row">轉彎半徑 <input type="range" id="radiusSlider" min="5" max="30" step="1" value="15"></div>
+    <div class="row">字體大小 <input type="range" id="fontSlider" min="80" max="300" step="10" value="180"></div>
+    <div class="row">側邊厚度 <input type="range" id="depthSlider" min="10" max="100" step="5" value="45"></div>
+    <button id="updateBtn">套用變更</button>
+</div>
 
-    <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
-    </script>
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
 
-    <script type="module">
-        import * as THREE from 'three';
+<script type="module">
+    import * as THREE from 'three';
 
-        class FlipBoardApp {
-            constructor() {
-                this.config = {
-                    text: "",
-                    startColor: "#00ffff",
-                    baseSpeed: 0.04,
-                    radius: 12,
-                    depth: 40,
-                    spacing: 4.8,
-                    fontSize: 180
-                };
-                
-                this.scene = new THREE.Scene();
-                this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-                this.renderer = new THREE.WebGLRenderer({ antialias: true });
-                this.charGroups = [];
-                
-                this.initApp();
-                this.animate();
-            }
-
-            initApp() {
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
-                document.body.appendChild(this.renderer.domElement);
-                this.camera.position.set(35, 25, 45);
-                this.camera.lookAt(-5, 5, -5);
-                
-                const grid = new THREE.GridHelper(200, 40, 0x333333, 0x111111);
-                this.scene.add(grid);
-                this.scene.add(new THREE.AmbientLight(0xffffff, 2.5));
-
-                this.syncFromUI();
-                this.createBoard();
-
-                window.addEventListener('resize', () => {
-                    this.camera.aspect = window.innerWidth / window.innerHeight;
-                    this.camera.updateProjectionMatrix();
-                    this.renderer.setSize(window.innerWidth, window.innerHeight);
-                });
-            }
-
-            syncFromUI() {
-                this.config.text = document.getElementById('textInput').value;
-                this.config.startColor = document.getElementById('colorPicker').value;
-                this.config.baseSpeed = parseFloat(document.getElementById('speedSlider').value);
-                this.config.radius = parseFloat(document.getElementById('radiusSlider').value);
-            }
-
-            // 極光感色彩引擎 🌌
-            getAuroraColor(index) {
-                const color = new THREE.Color(this.config.startColor);
-                const hsl = {};
-                color.getHSL(hsl);
-                
-                // 色相偏移 + 亮度遞減
-                hsl.h += (index / this.config.depth) * 0.12; 
-                const fade = Math.pow(1 - (index / this.config.depth), 1.6);
-                hsl.l *= (index === 0 ? 1 : 0.2 + 0.7 * fade);
-                
-                color.setHSL(hsl.h, hsl.s, hsl.l);
-                return `#${color.getHexString()}`;
-            }
-
-            createChar(char) {
-                const group = new THREE.Group();
-                const canvas = document.createElement('canvas');
-                canvas.width = 512; canvas.height = 512;
-                const ctx = canvas.getContext('2d');
-                ctx.font = `bold ${this.config.fontSize}px sans-serif`;
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-
-                for (let i = 0; i < this.config.depth; i++) {
-                    ctx.clearRect(0, 0, 512, 512);
-                    ctx.fillStyle = this.getAuroraColor(i);
-                    ctx.fillText(char, 256, 256);
-                    
-                    const texture = new THREE.CanvasTexture(canvas);
-                    const plane = new THREE.Mesh(
-                        new THREE.PlaneGeometry(3.5, 3.5),
-                        new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide })
-                    );
-                    plane.position.z = -(i * 0.06);
-                    group.add(plane);
-                }
-                return group;
-            }
-
-            createBoard() {
-                this.charGroups.forEach(g => this.scene.remove(g));
-                this.charGroups = [];
-                const chars = this.config.text.split('');
-                chars.forEach((c, i) => {
-                    const g = this.createChar(c);
-                    // 初始狀態
-                    g.userData = { 
-                        angle: 0, 
-                        state: 'straight', 
-                        offset: i * this.config.spacing 
-                    };
-                    g.position.set(30 + g.userData.offset, 5, 0);
-                    this.scene.add(g);
-                    this.charGroups.push(g);
-                });
-            }
-
-            animate() {
-                requestAnimationFrame(() => this.animate());
-                
-                const turnX = 0; // 開始轉彎的 X 座標
-                const R = this.config.radius;
-                const centerZ = -R; // 圓心 Z 座標
-
-                this.charGroups.forEach((g) => {
-                    let currentSpeed = this.config.baseSpeed;
-
-                    if (g.position.x > turnX && g.userData.state === 'straight') {
-                        // 1. 直線階段
-                        g.position.x -= currentSpeed;
-                    } 
-                    else if (g.userData.state !== 'finish') {
-                        // 2. 進入彎道 (狀態切換)
-                        g.userData.state = 'turning';
-                        
-                        // 漸進減速：計算在弧線上的進度 (0~90度)
-                        // 越靠近 45 度 (彎道頂點) 越慢
-                        const slowDown = 1 - (Math.sin(g.userData.angle) * 0.5); 
-                        currentSpeed *= slowDown;
-
-                        g.userData.angle += (currentSpeed / R);
-                        
-                        if (g.userData.angle < Math.PI / 2) {
-                            // 弧線座標計算
-                            g.position.x = turnX - R * Math.sin(g.userData.angle);
-                            g.position.z = centerZ + R * Math.cos(g.userData.angle);
-                            
-                            // 甩尾感：角度旋轉稍微延遲
-                            const targetRot = -g.userData.angle;
-                            g.rotation.y += (targetRot - g.rotation.y) * 0.1;
-                        } else {
-                            g.userData.state = 'finish';
-                        }
-                    } else {
-                        // 3. 出彎階段：恢復全速
-                        g.position.z -= currentSpeed;
-                    }
-
-                    // 重置循環
-                    if (g.position.z < -60) {
-                        g.position.set(40 + g.userData.offset, 5, 0);
-                        g.rotation.y = 0;
-                        g.userData.angle = 0;
-                        g.userData.state = 'straight';
-                    }
-                });
-
-                this.renderer.render(this.scene, this.camera);
-            }
+    class FlipBoardApp {
+        constructor() {
+            this.config = {
+                text: "", startColor: "", baseSpeed: 0.04, radius: 15, fontSize: 180, depth: 45, spacing: 5
+            };
+            this.scene = new THREE.Scene();
+            this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            this.renderer = new THREE.WebGLRenderer({ antialias: true });
+            this.charGroups = [];
+            this.init();
+            this.animate();
         }
 
-        const app = new FlipBoardApp();
-        document.getElementById('updateBtn').onclick = () => {
-            app.syncFromUI();
-            app.createBoard();
-        };
-    </script>
+        init() {
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(this.renderer.domElement);
+            this.camera.position.set(40, 30, 50);
+            this.camera.lookAt(0, 5, 0);
+
+            const grid = new THREE.GridHelper(200, 50, 0x222222, 0x111111);
+            this.scene.add(grid);
+            this.scene.add(new THREE.AmbientLight(0xffffff, 2));
+
+            this.syncConfig();
+            this.buildBoard();
+
+            window.addEventListener('resize', () => {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        syncConfig() {
+            this.config.text = document.getElementById('textInput').value;
+            this.config.startColor = document.getElementById('colorPicker').value;
+            this.config.baseSpeed = parseFloat(document.getElementById('speedSlider').value);
+            this.config.radius = parseFloat(document.getElementById('radiusSlider').value);
+            this.config.fontSize = parseInt(document.getElementById('fontSlider').value);
+            this.config.depth = parseInt(document.getElementById('depthSlider').value);
+            
+            // 自動計算字距：字體越大，間隔越寬
+            this.config.spacing = (this.config.fontSize / 180) * 4.8;
+        }
+
+        getAuroraColor(index) {
+            const color = new THREE.Color(this.config.startColor);
+            const hsl = {};
+            color.getHSL(hsl);
+            // 極光偏移：深度越深，色相微調，亮度降低
+            hsl.h += (index / this.config.depth) * 0.1; 
+            const fade = Math.pow(1 - (index / this.config.depth), 1.4);
+            hsl.l *= (index === 0 ? 1 : 0.25 + 0.65 * fade);
+            color.setHSL(hsl.h, hsl.s, hsl.l);
+            return `#${color.getHexString()}`;
+        }
+
+        createChar(char) {
+            const group = new THREE.Group();
+            const res = 1024; // 高解析度
+            const canvas = document.createElement('canvas');
+            canvas.width = res; canvas.height = res;
+            const ctx = canvas.getContext('2d');
+            
+            // 自動縮放：如果文字長度過長，字體會按比例縮小
+            const autoSize = Math.min(this.config.fontSize, (res / this.config.text.length) * 0.8);
+            ctx.font = `bold ${autoSize}px sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+            const layerSpacing = 0.07; // 每一層的間距
+            for (let i = 0; i < this.config.depth; i++) {
+                ctx.clearRect(0, 0, res, res);
+                ctx.fillStyle = this.getAuroraColor(i);
+                ctx.fillText(char, res/2, res/2);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const plane = new THREE.Mesh(
+                    new THREE.PlaneGeometry(4, 4),
+                    new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide })
+                );
+                plane.position.z = -(i * layerSpacing);
+                group.add(plane);
+            }
+            return group;
+        }
+
+        buildBoard() {
+            this.charGroups.forEach(g => this.scene.remove(g));
+            this.charGroups = [];
+            const chars = this.config.text.split('');
+            chars.forEach((c, i) => {
+                const g = this.createChar(c);
+                const xOffset = i * this.config.spacing;
+                g.userData = { angle: 0, state: 'straight', xStart: 35 + xOffset };
+                g.position.set(g.userData.xStart, 6, 0);
+                this.scene.add(g);
+                this.charGroups.push(g);
+            });
+        }
+
+        animate() {
+            requestAnimationFrame(() => this.animate());
+            const R = this.config.radius;
+            const turnX = 0;
+
+            this.charGroups.forEach((g) => {
+                let speed = this.config.baseSpeed;
+
+                if (g.position.x > turnX && g.userData.state === 'straight') {
+                    g.position.x -= speed;
+                } else if (g.userData.state !== 'done') {
+                    g.userData.state = 'turning';
+                    // 漸進減速：彎道中間最慢
+                    const slowFactor = 1 - (Math.sin(g.userData.angle) * 0.6);
+                    speed *= slowFactor;
+                    
+                    g.userData.angle += (speed / R);
+                    
+                    if (g.userData.angle < Math.PI / 2) {
+                        g.position.x = turnX - R * Math.sin(g.userData.angle);
+                        g.position.z = -R + R * Math.cos(g.userData.angle);
+                        // 甩尾感：旋轉角度稍微滯後
+                        g.rotation.y += (-g.userData.angle - g.rotation.y) * 0.12;
+                    } else {
+                        g.userData.state = 'done';
+                    }
+                } else {
+                    g.position.z -= speed;
+                }
+
+                // 重置與隨機起點 🎲
+                if (g.position.z < -80) {
+                    const randomZ = (Math.random() - 0.5) * 5; // 深度隨機偏移
+                    g.position.set(g.userData.xStart, 6, randomZ);
+                    g.rotation.y = 0;
+                    g.userData.angle = 0;
+                    g.userData.state = 'straight';
+                }
+            });
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    const myApp = new FlipBoardApp();
+    document.getElementById('updateBtn').onclick = () => {
+        myApp.syncConfig();
+        myApp.buildBoard();
+    };
+</script>
 </body>
 </html>
