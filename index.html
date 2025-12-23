@@ -2,23 +2,22 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>3D 極光甩尾看板 Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 極光看板 Pro (行動優化版)</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #ui {
-            position: absolute; top: 15px; left: 15px; z-index: 100;
-            background: rgba(10, 10, 10, 0.9); padding: 18px; border-radius: 10px; color: white;
-            border: 1px solid #333; width: 300px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            position: absolute; top: 10px; left: 10px; z-index: 100;
+            background: rgba(0, 0, 0, 0.8); padding: 15px; border-radius: 8px; color: white;
+            border: 1px solid #444; width: 260px; font-size: 13px;
         }
-        .row { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
-        input[type="text"] { width: 170px; padding: 5px; background: #1a1a1a; border: 1px solid #444; color: white; }
-        input[type="range"] { width: 150px; cursor: pointer; }
+        .row { margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+        input[type="text"] { width: 140px; padding: 4px; background: #222; border: 1px solid #666; color: white; }
+        input[type="range"] { width: 120px; }
         button { 
-            width: 100%; padding: 10px; margin-top: 10px; background: #00ffff; 
-            border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: #000;
+            width: 100%; padding: 8px; margin-top: 8px; background: #00ffff; 
+            border: none; border-radius: 4px; font-weight: bold; cursor: pointer;
         }
-        button:hover { background: #00d9d9; }
-        .label-val { color: #00ffff; font-family: monospace; }
     </style>
 </head>
 <body>
@@ -27,10 +26,10 @@
     <div class="row">文字內容 <input type="text" id="textInput" value="基隆市府安排免費接駁車"></div>
     <div class="row">極光主色 <input type="color" id="colorPicker" value="#00ffff"></div>
     <div class="row">基本速度 <input type="range" id="speedSlider" min="0.01" max="0.1" step="0.005" value="0.04"></div>
-    <div class="row">轉彎半徑 <input type="range" id="radiusSlider" min="5" max="30" step="1" value="15"></div>
+    <div class="row">轉彎半徑 <input type="range" id="radiusSlider" min="5" max="25" step="1" value="12"></div>
     <div class="row">字體大小 <input type="range" id="fontSlider" min="80" max="300" step="10" value="180"></div>
-    <div class="row">側邊厚度 <input type="range" id="depthSlider" min="10" max="100" step="5" value="45"></div>
-    <button id="updateBtn">套用變更</button>
+    <div class="row">側邊厚度 <input type="range" id="depthSlider" min="5" max="60" step="5" value="30"></div>
+    <button id="updateBtn">更新看板</button>
 </div>
 
 <script type="importmap">
@@ -43,27 +42,26 @@
     class FlipBoardApp {
         constructor() {
             this.config = {
-                text: "", startColor: "", baseSpeed: 0.04, radius: 15, fontSize: 180, depth: 45, spacing: 5
+                text: "", startColor: "", baseSpeed: 0.04, radius: 12, fontSize: 180, depth: 30
             };
             this.scene = new THREE.Scene();
-            this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-            this.renderer = new THREE.WebGLRenderer({ antialias: true });
+            this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
             this.charGroups = [];
+            
             this.init();
             this.animate();
         }
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.setPixelRatio(window.devicePixelRatio);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制像素密度防止手機過熱
             document.body.appendChild(this.renderer.domElement);
-            this.camera.position.set(40, 30, 50);
+            
+            this.camera.position.set(30, 20, 40);
             this.camera.lookAt(0, 5, 0);
 
-            const grid = new THREE.GridHelper(200, 50, 0x222222, 0x111111);
-            this.scene.add(grid);
-            this.scene.add(new THREE.AmbientLight(0xffffff, 2));
-
+            this.scene.add(new THREE.AmbientLight(0xffffff, 2.5));
             this.syncConfig();
             this.buildBoard();
 
@@ -81,61 +79,70 @@
             this.config.radius = parseFloat(document.getElementById('radiusSlider').value);
             this.config.fontSize = parseInt(document.getElementById('fontSlider').value);
             this.config.depth = parseInt(document.getElementById('depthSlider').value);
-            
-            // 自動計算字距：字體越大，間隔越寬
-            this.config.spacing = (this.config.fontSize / 180) * 4.8;
         }
 
+        // 高效色彩引擎：直接返回 Three.js Color 物件
         getAuroraColor(index) {
             const color = new THREE.Color(this.config.startColor);
             const hsl = {};
             color.getHSL(hsl);
-            // 極光偏移：深度越深，色相微調，亮度降低
-            hsl.h += (index / this.config.depth) * 0.1; 
-            const fade = Math.pow(1 - (index / this.config.depth), 1.4);
-            hsl.l *= (index === 0 ? 1 : 0.25 + 0.65 * fade);
+            hsl.h += (index / this.config.depth) * 0.08; 
+            const fade = Math.pow(1 - (index / this.config.depth), 1.5);
+            hsl.l *= (index === 0 ? 1 : 0.2 + 0.7 * fade);
             color.setHSL(hsl.h, hsl.s, hsl.l);
-            return `#${color.getHexString()}`;
+            return color;
         }
 
         createChar(char) {
             const group = new THREE.Group();
-            const res = 1024; // 高解析度
+            const res = 512; // 手機優化解析度
             const canvas = document.createElement('canvas');
             canvas.width = res; canvas.height = res;
             const ctx = canvas.getContext('2d');
             
-            // 自動縮放：如果文字長度過長，字體會按比例縮小
-            const autoSize = Math.min(this.config.fontSize, (res / this.config.text.length) * 0.8);
+            // 文字自動縮放
+            const autoSize = Math.min(this.config.fontSize, (res / this.config.text.length) * 0.9);
             ctx.font = `bold ${autoSize}px sans-serif`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = "#ffffff"; // 使用白色作為基礎，方便之後用 Mesh color 染色
+            ctx.fillText(char, res/2, res/2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const geometry = new THREE.PlaneGeometry(4, 4);
 
-            const layerSpacing = 0.07; // 每一層的間距
             for (let i = 0; i < this.config.depth; i++) {
-                ctx.clearRect(0, 0, res, res);
-                ctx.fillStyle = this.getAuroraColor(i);
-                ctx.fillText(char, res/2, res/2);
+                // 效能關鍵：共用貼圖，僅在材質上染色
+                const material = new THREE.MeshBasicMaterial({ 
+                    map: texture, 
+                    transparent: true, 
+                    color: this.getAuroraColor(i),
+                    side: THREE.DoubleSide
+                });
                 
-                const texture = new THREE.CanvasTexture(canvas);
-                const plane = new THREE.Mesh(
-                    new THREE.PlaneGeometry(4, 4),
-                    new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide })
-                );
-                plane.position.z = -(i * layerSpacing);
+                const plane = new THREE.Mesh(geometry, material);
+                plane.position.z = -(i * 0.08); // 層間距
                 group.add(plane);
             }
             return group;
         }
 
         buildBoard() {
-            this.charGroups.forEach(g => this.scene.remove(g));
+            this.charGroups.forEach(g => {
+                g.children.forEach(child => child.material.dispose()); // 清釋放記憶體
+                this.scene.remove(g);
+            });
             this.charGroups = [];
+            
             const chars = this.config.text.split('');
+            const spacing = (this.config.fontSize / 180) * 4.5;
+
             chars.forEach((c, i) => {
                 const g = this.createChar(c);
-                const xOffset = i * this.config.spacing;
-                g.userData = { angle: 0, state: 'straight', xStart: 35 + xOffset };
-                g.position.set(g.userData.xStart, 6, 0);
+                const xOffset = i * spacing;
+                // 加入隨機初始 Z 位移，達成「隨機重生層次感」
+                const randomZ = (Math.random() - 0.5) * 5;
+                g.userData = { angle: 0, state: 'straight', xStart: 30 + xOffset, zStart: randomZ };
+                g.position.set(g.userData.xStart, 5, g.userData.zStart);
                 this.scene.add(g);
                 this.charGroups.push(g);
             });
@@ -153,41 +160,42 @@
                     g.position.x -= speed;
                 } else if (g.userData.state !== 'done') {
                     g.userData.state = 'turning';
-                    // 漸進減速：彎道中間最慢
-                    const slowFactor = 1 - (Math.sin(g.userData.angle) * 0.6);
+                    // 漸進式減速邏輯
+                    const slowFactor = 1 - (Math.sin(g.userData.angle) * 0.55);
                     speed *= slowFactor;
                     
                     g.userData.angle += (speed / R);
                     
                     if (g.userData.angle < Math.PI / 2) {
                         g.position.x = turnX - R * Math.sin(g.userData.angle);
-                        g.position.z = -R + R * Math.cos(g.userData.angle);
-                        // 甩尾感：旋轉角度稍微滯後
-                        g.rotation.y += (-g.userData.angle - g.rotation.y) * 0.12;
+                        g.position.z = g.userData.zStart - R + R * Math.cos(g.userData.angle);
+                        // 甩尾延遲感
+                        const targetRot = -g.userData.angle;
+                        g.rotation.y += (targetRot - g.rotation.y) * 0.15;
                     } else {
                         g.userData.state = 'done';
                     }
                 } else {
+                    // 出彎加速恢復
                     g.position.z -= speed;
                 }
 
-                // 重置與隨機起點 🎲
-                if (g.position.z < -80) {
-                    const randomZ = (Math.random() - 0.5) * 5; // 深度隨機偏移
-                    g.position.set(g.userData.xStart, 6, randomZ);
-                    g.rotation.y = 0;
+                if (g.position.z < -60) {
                     g.userData.angle = 0;
                     g.userData.state = 'straight';
+                    g.rotation.y = 0;
+                    g.userData.zStart = (Math.random() - 0.5) * 5; // 重新隨機
+                    g.position.set(g.userData.xStart, 5, g.userData.zStart);
                 }
             });
             this.renderer.render(this.scene, this.camera);
         }
     }
 
-    const myApp = new FlipBoardApp();
+    const app = new FlipBoardApp();
     document.getElementById('updateBtn').onclick = () => {
-        myApp.syncConfig();
-        myApp.buildBoard();
+        app.syncConfig();
+        app.buildBoard();
     };
 </script>
 </body>
