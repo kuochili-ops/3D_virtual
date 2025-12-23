@@ -3,37 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR 3D Path Overlay</title>
+    <title>Mercedes AR Studio</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
+        #video-bg { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 1; }
+        #three-canvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
         
-        /* 底層：相機影像 */
-        #video-bg {
-            position: absolute; top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            object-fit: cover;
-            z-index: 1; /* 最底層 */
-        }
-
-        /* 中層：3D 文字渲染區 */
-        #three-canvas {
-            position: absolute; top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            z-index: 10; /* 覆蓋在影像之上 */
-            pointer-events: auto; /* 允許點擊拖動控制球 */
-        }
-
-        /* 上層：UI 控制面板 */
         #app-ui {
-            position: absolute; top: 20px; left: 20px;
-            z-index: 100; /* 最上層 */
-            background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(10px);
+            position: absolute; top: 20px; left: 20px; z-index: 100;
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(10px);
             padding: 15px; border-radius: 12px; border: 1px solid #00ffff;
             display: flex; flex-direction: column; gap: 10px; width: 220px;
         }
+        .ui-row { display: flex; flex-direction: column; gap: 4px; }
         label { color: #00ffff; font-size: 11px; font-weight: bold; }
-        button { padding: 8px; border-radius: 6px; border: none; background: #00ffff; font-weight: bold; cursor: pointer; }
-        input { padding: 8px; border-radius: 6px; border: none; background: #222; color: #fff; }
+        input, button { padding: 8px; border-radius: 6px; border: none; font-size: 13px; }
+        input[type="range"] { accent-color: #00ffff; }
+        
+        /* 錄影鈕 */
+        #rec-btn {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            width: 70px; height: 70px; border-radius: 50%; border: 4px solid #fff;
+            background: red; z-index: 100; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        #rec-btn.recording { border-color: #f00; background: #fff; border-radius: 10px; width: 50px; height: 50px; }
     </style>
 </head>
 <body>
@@ -42,12 +35,20 @@
 <div id="three-canvas"></div>
 
 <div id="app-ui">
-    <label>文字內容</label>
-    <input type="text" id="textInput" value="MERCEDES-BENZ">
-    <button id="startCam">1. 開啟相機</button>
-    <button id="toggleDir">2. 切換文字方向</button>
-    <div style="color: #fff; font-size: 10px; opacity: 0.6;">* 手指拖動青色球調整路徑</div>
+    <div class="ui-row">
+        <label>文字內容</label>
+        <input type="text" id="textInput" value="MERCEDES-BENZ">
+    </div>
+    <div class="ui-row">
+        <label>行進速度</label>
+        <input type="range" id="speedSlider" min="1" max="100" value="10">
+    </div>
+    <button id="startCam" style="background: #fff;">1. 開啟相機</button>
+    <button id="toggleGuide" style="background: #444; color: #fff;">顯示/隱藏輔助球</button>
+    <button id="toggleDir" style="background: #444; color: #fff;">切換流向</button>
 </div>
+
+<div id="rec-btn"></div>
 
 <script type="importmap">
     { 
@@ -63,6 +64,8 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
+    let mediaRecorder, recordedChunks = [];
+
     // 相機啟動
     document.getElementById('startCam').onclick = async () => {
         const video = document.getElementById('video-bg');
@@ -70,12 +73,11 @@
         video.srcObject = stream;
     };
 
-    class ARApp {
+    class ARStudio {
         constructor() {
-            this.config = { speed: 0.0015, reverse: false };
+            this.config = { speed: 0.001, reverse: false, showGuides: true };
             this.scene = new THREE.Scene();
-            // 關鍵：alpha: true 讓 3D 背景透明
-            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
             this.charGroups = [];
             this.init();
@@ -84,11 +86,9 @@
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('three-canvas').appendChild(this.renderer.domElement);
-            
             this.camera.position.set(0, 30, 120);
             this.scene.add(new THREE.AmbientLight(0xffffff, 5));
 
-            // 初始化路徑點
             this.points = [
                 this.createPoint(new THREE.Vector3(60, 0, 0)),
                 this.createPoint(new THREE.Vector3(0, 0, 0)),
@@ -98,8 +98,17 @@
             const drag = new DragControls(this.points, this.camera, this.renderer.domElement);
             drag.addEventListener('drag', () => this.updatePath());
 
+            // UI 綁定
             document.getElementById('textInput').oninput = () => this.updateText();
+            document.getElementById('speedSlider').oninput = (e) => this.config.speed = e.target.value * 0.0001;
             document.getElementById('toggleDir').onclick = () => this.config.reverse = !this.config.reverse;
+            document.getElementById('toggleGuide').onclick = () => {
+                this.config.showGuides = !this.config.showGuides;
+                this.points.forEach(p => p.visible = this.config.showGuides);
+            };
+
+            // 錄影邏輯
+            document.getElementById('recordBtn').onclick = () => this.toggleRecording();
 
             this.updatePath();
             this.updateText();
@@ -160,8 +169,34 @@
             });
             this.renderer.render(this.scene, this.camera);
         }
+
+        toggleRecording() {
+            const btn = document.getElementById('recordBtn');
+            if (!mediaRecorder || mediaRecorder.state === "inactive") {
+                this.startRecording();
+                btn.classList.add('recording');
+            } else {
+                mediaRecorder.stop();
+                btn.classList.remove('recording');
+            }
+        }
+
+        startRecording() {
+            recordedChunks = [];
+            const stream = this.renderer.domElement.captureStream(30);
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'ar-mercedes.webm'; a.click();
+            };
+            mediaRecorder.start();
+        }
     }
-    new ARApp();
+    const app = new ARStudio();
+    document.getElementById('rec-btn').onclick = () => app.toggleRecording();
 </script>
 </body>
 </html>
