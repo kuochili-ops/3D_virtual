@@ -3,29 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Path Editor App</title>
+    <title>Mercedes-Benz Path & Speed Control</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #app-ui {
             position: absolute; top: 15px; left: 15px; z-index: 1000;
-            background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(10px);
-            padding: 12px; border-radius: 12px; border: 1px solid #00ffff;
-            display: flex; flex-direction: column; gap: 8px; width: 220px;
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(10px);
+            padding: 15px; border-radius: 12px; border: 1px solid #00ffff;
+            display: flex; flex-direction: column; gap: 12px; width: 240px;
         }
-        input { padding: 8px; border-radius: 6px; border: none; background: #222; color: #fff; }
+        .ui-row { display: flex; flex-direction: column; gap: 5px; }
+        label { color: #00ffff; font-size: 12px; font-weight: bold; }
+        input[type="text"] { padding: 8px; border-radius: 6px; border: none; background: #222; color: #fff; }
+        input[type="range"] { cursor: pointer; accent-color: #00ffff; }
         #hint { 
             position: absolute; bottom: 20px; width: 100%; text-align: center; 
-            color: #00ffff; font-size: 13px; pointer-events: none; text-shadow: 0 0 5px #000;
+            color: rgba(0, 255, 255, 0.6); font-size: 12px; pointer-events: none;
         }
     </style>
 </head>
 <body>
 
 <div id="app-ui">
-    <input type="text" id="textInput" value="MERCEDES-BENZ">
-    <div style="color: #ccc; font-size: 11px; margin-top: 5px;">* 拖動畫面中的發光球來改變路徑</div>
+    <div class="ui-row">
+        <label>文字內容</label>
+        <input type="text" id="textInput" value="MERCEDES-BENZ">
+    </div>
+    <div class="ui-row">
+        <label>行進速度</label>
+        <input type="range" id="speedSlider" min="1" max="100" value="20">
+    </div>
+    <div style="color: #888; font-size: 10px;">* 拖拽畫面中的發光球可修改路徑</div>
 </div>
-<div id="hint">拖動起點、轉點、終點球體來規劃文字動線</div>
+<div id="hint">建議將速度調慢，觀察轉彎處的 3D 厚度甩尾</div>
 
 <script type="importmap">
     { 
@@ -41,13 +51,14 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class PathEditorApp {
+    class SpeedPathApp {
         constructor() {
+            this.config = { speed: 0.002, depth: 45 };
             this.scene = new THREE.Scene();
             this.camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 1000);
             this.renderer = new THREE.WebGLRenderer({ antialias: true });
             this.charGroups = [];
-            this.points = []; // 存儲三個控制球
+            this.points = [];
             this.curve = null;
             
             this.init();
@@ -59,31 +70,36 @@
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(this.renderer.domElement);
 
-            this.camera.position.set(80, 50, 100);
+            this.camera.position.set(85, 45, 95);
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
             this.orbit.enableDamping = true;
 
             this.scene.add(new THREE.AmbientLight(0xffffff, 3));
 
-            // --- 創建三個控制球 (起點, 轉折點, 終點) ---
-            const p1 = this.createPoint(new THREE.Vector3(70, 0, 0), "START");
+            // 控制球：起點、圓角轉折、終點
+            const p1 = this.createPoint(new THREE.Vector3(75, 0, 0), "START");
             const p2 = this.createPoint(new THREE.Vector3(0, 0, 0), "PIVOT");
-            const p3 = this.createPoint(new THREE.Vector3(0, 0, -70), "END");
+            const p3 = this.createPoint(new THREE.Vector3(0, 0, -75), "END");
             this.points = [p1, p2, p3];
 
-            // 拖拽功能
             this.drag = new DragControls(this.points, this.camera, this.renderer.domElement);
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
-            this.drag.addEventListener('dragend', () => {
-                this.orbit.enabled = true;
-                this.updatePath();
-            });
+            this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
             this.drag.addEventListener('drag', () => this.updatePath());
+
+            // 監聽 UI
+            const speedSlider = document.getElementById('speedSlider');
+            speedSlider.oninput = (e) => {
+                // 將 1-100 映射到極慢到一般的速度
+                this.config.speed = e.target.value * 0.0001;
+            };
+            this.config.speed = speedSlider.value * 0.0001;
+
+            document.getElementById('textInput').oninput = () => this.updateText();
 
             this.updatePath();
             this.updateText();
 
-            document.getElementById('textInput').oninput = () => this.updateText();
             window.addEventListener('resize', () => {
                 this.camera.aspect = window.innerWidth / window.innerHeight;
                 this.camera.updateProjectionMatrix();
@@ -92,28 +108,24 @@
         }
 
         createPoint(pos, name) {
-            const geo = new THREE.SphereGeometry(2, 16, 16);
-            const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6 });
+            const geo = new THREE.SphereGeometry(2.5, 16, 16);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.4 });
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.copy(pos);
-            mesh.userData.name = name;
             this.scene.add(mesh);
             return mesh;
         }
 
         updatePath() {
-            // 使用 QuadraticBezierCurve 產生平滑圓角
             this.curve = new THREE.QuadraticBezierCurve3(
                 this.points[0].position,
                 this.points[1].position,
                 this.points[2].position
             );
-
-            // 更新視覺化線條
             if (this.line) this.scene.remove(this.line);
             const curvePoints = this.curve.getPoints(50);
             const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
-            const material = new THREE.LineBasicMaterial({ color: 0x00ffff });
+            const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.3 });
             this.line = new THREE.Line(geometry, material);
             this.scene.add(this.line);
         }
@@ -128,15 +140,15 @@
             chars.forEach((c, i) => {
                 const group = new THREE.Group();
                 const tex = this.createTexture(c);
-                for (let j = 0; j < 40; j++) {
+                for (let j = 0; j < this.config.depth; j++) {
                     const color = new THREE.Color(0xe0e0e0);
-                    color.multiplyScalar(0.2 + 0.8 * Math.pow(1 - j/40, 1.5));
-                    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: color, alphaTest: 0.2, side: THREE.DoubleSide });
+                    color.multiplyScalar(0.2 + 0.8 * Math.pow(1 - j/this.config.depth, 1.5));
+                    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, color: color, alphaTest: 0.18, side: THREE.DoubleSide });
                     const m = new THREE.Mesh(geometry, mat);
-                    m.position.z = -(j * 0.1);
+                    m.position.z = -(j * 0.12); // 增加厚度
                     group.add(m);
                 }
-                group.userData = { t: -i * 0.08 }; // 每個字的初始進度感
+                group.userData = { t: -i * 0.08 }; 
                 this.scene.add(group);
                 this.charGroups.push(group);
             });
@@ -158,28 +170,26 @@
             requestAnimationFrame(() => this.animate());
             this.orbit.update();
 
-            const speed = 0.005;
             this.charGroups.forEach(g => {
-                g.userData.t += speed;
-                if (g.userData.t > 1) g.userData.t = 0;
+                g.userData.t += this.config.speed;
+                if (g.userData.t > 1.2) g.userData.t = -0.2; // 增加循環緩衝
 
-                if (g.userData.t >= 0) {
+                if (g.userData.t >= 0 && g.userData.t <= 1) {
                     const pos = this.curve.getPointAt(g.userData.t);
                     const tangent = this.curve.getTangentAt(g.userData.t);
                     g.position.copy(pos);
-                    // 讓文字始終面向行進方向（甩尾感）
                     g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
                     g.rotation.x = 0; g.rotation.z = 0;
+                    g.visible = true;
                 } else {
-                    g.position.set(999,999,999); // 隱藏尚未出發的字
+                    g.visible = false;
                 }
             });
-
             this.renderer.render(this.scene, this.camera);
         }
     }
 
-    new PathEditorApp();
+    new SpeedPathApp();
 </script>
 </body>
 </html>
