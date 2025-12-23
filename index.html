@@ -2,28 +2,23 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>3D 轉彎前進實感模組</title>
+    <title>3D 轉向 90 度續行看板</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #ui {
             position: absolute; top: 20px; left: 20px; z-index: 100;
-            background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; color: white;
-            border: 1px solid #444;
+            background: rgba(0,0,0,0.85); padding: 15px; border-radius: 10px; color: white;
+            border: 1px solid #00ffff;
         }
-        .controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
-        input[type="text"] { padding: 8px; width: 200px; border-radius: 4px; border: none; }
-        input[type="color"] { border: none; width: 30px; height: 30px; cursor: pointer; background: none; }
-        button { padding: 8px 12px; background: #00ffff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        input { padding: 8px; border-radius: 4px; border: none; width: 200px; }
+        button { padding: 8px 15px; background: #00ffff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <input type="text" id="textInput" value="看到轉彎後繼續前進" placeholder="輸入文字...">
-        <div class="controls">
-            <input type="color" id="colorPicker" value="#00ffff">
-            <button id="updateBtn">更新文字</button>
-        </div>
+        <input type="text" id="textInput" value="轉向九十度後繼續前進">
+        <button id="updateBtn">發送</button>
     </div>
 
     <script type="importmap">
@@ -33,11 +28,11 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 1. 環境設定 ---
+        // --- 1. 場景基礎 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // 視角稍微往左偏一點，這樣文字轉彎後往後走的過程會看得很清楚
-        camera.position.set(20, 15, 30);
+        // 仰視角，能清楚看到 X 軸與 Z 軸的交接
+        camera.position.set(25, 18, 30);
         camera.lookAt(-5, 5, -10);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -45,16 +40,13 @@
         document.body.appendChild(renderer.domElement);
 
         scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+        scene.add(new THREE.GridHelper(100, 40, 0x222222, 0x111111));
 
-        // 地面網格
-        const grid = new THREE.GridHelper(100, 40, 0x333333, 0x222222);
-        scene.add(grid);
-
-        // --- 2. 堆疊字產生器 ---
-        function createStackedChar(char, baseColor) {
+        // --- 2. 密集堆疊字產生器 ---
+        function createStackedChar(char, colorStr) {
             const group = new THREE.Group();
-            const layers = 30; 
-            const depthStep = 0.05; 
+            const layers = 35;
+            const depthStep = 0.045;
 
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 256;
@@ -63,11 +55,11 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
-            const color = new THREE.Color(baseColor);
+            const baseColor = new THREE.Color(colorStr);
             for (let i = 0; i < layers; i++) {
                 ctx.clearRect(0, 0, 256, 256);
                 const l = 1.0 - (i * 0.025);
-                ctx.fillStyle = '#' + color.clone().multiplyScalar(i === 0 ? 1 : l).getHexString();
+                ctx.fillStyle = '#' + baseColor.clone().multiplyScalar(i === 0 ? 1 : l).getHexString();
                 ctx.fillText(char, 128, 128);
 
                 const texture = new THREE.CanvasTexture(canvas);
@@ -79,57 +71,54 @@
             return group;
         }
 
-        // --- 3. 動畫與邏輯 ---
+        // --- 3. 運動邏輯控制器 ---
         let charGroups = [];
         const config = {
-            speed: 0.12,    
-            turnX: -5,      // 轉彎啟動點
-            spacing: 4.5,   
-            finishZ: -40    // 讓它走遠一點再消失
+            speed: 0.12,
+            turnX: -8,       // 轉彎點的 X 座標
+            spacing: 4.5,    // 字距
+            finishZ: -50     // 轉彎後要跑多遠（Z軸深度）
         };
 
-        function start() {
+        function initMarquee(text) {
             charGroups.forEach(g => scene.remove(g));
             charGroups = [];
-            const text = document.getElementById('textInput').value;
-            const color = document.getElementById('colorPicker').value;
             text.split('').forEach((c, i) => {
-                const g = createStackedChar(c, color);
-                g.position.set(25 + (i * config.spacing), 5, 10);
+                const g = createStackedChar(c, '#00ffff');
+                // 初始位置：X 軸右側，Z 軸固定在前方
+                g.position.set(20 + (i * config.spacing), 5, 5);
                 scene.add(g);
                 charGroups.push(g);
             });
         }
 
+        // --- 4. 關鍵動畫：兩階段位移 ---
         function animate() {
             requestAnimationFrame(animate);
             
             charGroups.forEach((group) => {
-                // 階段 1：直行 (正面對著觀眾)
+                // 階段 A：X 軸直行 (正面對觀眾)
                 if (group.position.x > config.turnX) {
                     group.position.x -= config.speed;
                 } 
-                // 階段 2：轉彎中與轉向後的行進
+                // 階段 B：轉向並沿著 Z 軸直行
                 else {
-                    // 平滑旋轉直到 90 度
+                    // 1. 執行旋轉 (直到滿 90 度)
                     if (group.rotation.y > -Math.PI / 2) {
-                        group.rotation.y -= 0.1; 
+                        group.rotation.y -= 0.12; 
+                        // 旋轉時微調 X，讓它像繞著圓弧轉
+                        group.position.x -= 0.04; 
                     }
                     
-                    // 無論旋轉完沒，都開始往 Z 軸深處大幅移動
-                    // 這裡就是您想看到的「繼續前進」
-                    group.position.z -= config.speed * 2.0; 
-                    
-                    // 微調 X 軸讓軌跡像圓弧
-                    if (group.position.z > 0) {
-                        group.position.x -= 0.05;
-                    }
+                    // 2. 這是您要的：轉向後繼續沿著 Z 軸往深處前進
+                    // 即使旋轉完了，這裡也會持續執行，直到到達 finishZ
+                    group.position.z -= config.speed * 2.2; 
                 }
 
-                // 循環重置 (走完 40 單位長的深度後才重置)
+                // 循環重置
                 if (group.position.z < config.finishZ) {
                     const lastX = Math.max(...charGroups.map(g => g.position.x));
-                    group.position.set(lastX + config.spacing, 5, 10);
+                    group.position.set(lastX + config.spacing, 5, 5);
                     group.rotation.y = 0;
                 }
             });
@@ -137,8 +126,8 @@
             renderer.render(scene, camera);
         }
 
-        document.getElementById('updateBtn').onclick = start;
-        start();
+        document.getElementById('updateBtn').onclick = () => initMarquee(document.getElementById('textInput').value);
+        initMarquee("轉向九十度後繼續前進");
         animate();
     </script>
 </body>
