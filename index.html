@@ -3,16 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Billboard - Shinjuku Style</title>
+    <title>3D Anamorphic Billboard</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; cursor: none; }
-        /* 隱藏 UI，僅在需要時呼叫 */
-        #config-trigger { position: absolute; top: 0; right: 0; width: 50px; height: 50px; z-index: 1000; opacity: 0; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
+        /* 隱藏所有介面，專注於 3D 效果 */
     </style>
 </head>
 <body>
-
-<div id="config-trigger"></div>
 
 <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -21,18 +18,18 @@
 <script type="module">
     import * as THREE from 'three';
 
-    class Shinjuku3DApp {
+    class ShinjukuVisionApp {
         constructor() {
             this.config = {
-                text: "全螢幕 3D 視覺錯視看板測試",
+                text: "新宿裸眼3D視覺錯視看板效果",
                 color: "#00ffcc",
                 speed: 0.05,
-                depth: 35, // 穩定版厚度
-                fontSize: 350
+                depth: 50, // 增加厚度強化轉彎時的側邊視覺
+                fontSize: 300
             };
             this.scene = new THREE.Scene();
             this.camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000);
-            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            this.renderer = new THREE.WebGLRenderer({ antialias: true });
             this.charGroups = [];
             
             this.init();
@@ -44,14 +41,12 @@
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(this.renderer.domElement);
 
-            // 仿新宿貓咪視角：斜上方俯瞰
-            this.camera.position.set(40, 30, 50);
-            this.camera.lookAt(0, 0, 0);
+            // --- 關鍵：鎖定照片中的拍攝角度 ---
+            // x:45 (右側), y:35 (上方俯瞰), z:60 (遠距離產生廣角感)
+            this.camera.position.set(45, 35, 60);
+            this.camera.lookAt(-5, 5, 0); // 鏡頭對準轉角中心
 
-            // 強化環境光
-            const ambient = new THREE.AmbientLight(0xffffff, 3);
-            this.scene.add(ambient);
-
+            this.scene.add(new THREE.AmbientLight(0xffffff, 3.5));
             this.buildBoard();
 
             window.addEventListener('resize', () => {
@@ -76,9 +71,8 @@
         buildBoard() {
             this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
-
             const chars = this.config.text.split('');
-            const geometry = new THREE.PlaneGeometry(8, 8); // 放大尺寸增加震撼感
+            const geometry = new THREE.PlaneGeometry(8, 8);
 
             chars.forEach((c, i) => {
                 const group = new THREE.Group();
@@ -88,32 +82,29 @@
                     const color = new THREE.Color(this.config.color);
                     const hsl = {};
                     color.getHSL(hsl);
-                    
                     if (j > 0) {
                         hsl.l *= (0.1 + 0.4 * Math.pow(1 - j/this.config.depth, 1.5));
-                    } else {
-                        hsl.l = 1.0; 
-                    }
+                    } else { hsl.l = 1.0; }
                     color.setHSL(hsl.h, hsl.s, hsl.l);
 
                     const mat = new THREE.MeshBasicMaterial({ 
-                        map: tex, transparent: true, color: color, alphaTest: 0.2
+                        map: tex, transparent: true, color: color, alphaTest: 0.15
                     });
                     const m = new THREE.Mesh(geometry, mat);
                     m.position.z = -(j * 0.08); 
-                    if (j === 0) m.scale.set(1.05, 1.05, 1);
+                    if (j === 0) m.scale.set(1.1, 1.1, 1);
                     group.add(m);
                 }
 
-                // 初始位置設定在右側深處 (仿新宿牆面起點)
-                const spacing = 6;
+                const spacing = 7;
+                // 設定起點在右側牆壁深處
                 group.userData = { 
                     angle: 0, 
                     state: 'right-wall', 
-                    xStart: 50 + (i * spacing), 
+                    xStart: 60 + (i * spacing), 
                     zStart: 0 
                 };
-                group.position.set(group.userData.xStart, 0, group.userData.zStart);
+                group.position.set(group.userData.xStart, 6, group.userData.zStart);
                 this.scene.add(group);
                 this.charGroups.push(group);
             });
@@ -121,23 +112,21 @@
 
         animate() {
             requestAnimationFrame(() => this.animate());
-            const R = 20; // 轉彎半徑
-            const cornerX = 0; // 轉角坐標
+            const R = 25; // 轉彎半徑加大，模仿照片中貓咪跨越轉角的弧度
+            const cornerX = 0;
 
             this.charGroups.forEach(g => {
                 let s = this.config.speed;
 
                 if (g.userData.state === 'right-wall') {
                     g.position.x -= s;
-                    if (g.position.x <= cornerX) {
-                        g.userData.state = 'turning';
-                    }
+                    if (g.position.x <= cornerX) g.userData.state = 'turning';
                 } else if (g.userData.state === 'turning') {
-                    const slow = 1 - (Math.sin(g.userData.angle) * 0.4);
+                    const slow = 1 - (Math.sin(g.userData.angle) * 0.5);
                     g.userData.angle += (s * slow / R);
                     
                     if (g.userData.angle < Math.PI / 2) {
-                        // 轉向公式
+                        // 旋轉動線：從 X-Z 平面轉向 Z-X 平面
                         g.position.x = cornerX - R * Math.sin(g.userData.angle);
                         g.position.z = g.userData.zStart - R + R * Math.cos(g.userData.angle);
                         g.rotation.y = -g.userData.angle;
@@ -145,23 +134,21 @@
                         g.userData.state = 'left-wall';
                     }
                 } else {
-                    // 往左牆遠處消失
-                    g.position.z -= s;
+                    g.position.z -= s; // 往左側遠方遊走
                 }
 
-                // 重生判定
-                if (g.position.z < -80) {
+                if (g.position.z < -100) {
                     g.userData.state = 'right-wall';
                     g.userData.angle = 0;
                     g.rotation.y = 0;
-                    g.position.set(g.userData.xStart, 0, g.userData.zStart);
+                    g.position.set(g.userData.xStart, 6, g.userData.zStart);
                 }
             });
             this.renderer.render(this.scene, this.camera);
         }
     }
 
-    new Shinjuku3DApp();
+    new ShinjukuVisionApp();
 </script>
 </body>
 </html>
