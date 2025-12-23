@@ -3,32 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR Studio - Real Recording</title>
+    <title>AR Studio Pro</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
         #video-bg { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 1; }
-        #three-canvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: auto; }
+        #three-canvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
         
-        /* 底部控制面板 */
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: linear-gradient(transparent, rgba(0,0,0,0.8));
-            padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px;
-            transition: opacity 0.3s;
+            background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(10px);
+            padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px;
         }
-        .ui-row { width: 90%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; }
-        input[type="text"] { background: rgba(255,255,255,0.2); border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 60%; }
+        .ui-row { width: 100%; max-width: 400px; display: flex; justify-content: space-between; align-items: center; }
+        input[type="text"] { background: #222; border: 1px solid #00ffff; color: #fff; padding: 12px; border-radius: 8px; width: 60%; font-size: 16px; }
         
-        #rec-btn {
-            width: 70px; height: 70px; border-radius: 50%; border: 4px solid #fff;
-            background: red; cursor: pointer; margin-top: 10px;
-        }
-        #rec-btn.active { border-radius: 12px; background: #fff; transform: scale(0.8); }
-        .btn-sm { background: #00ffff; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-        
-        /* 錄影時隱藏 UI */
-        .recording-mode #app-ui { opacity: 0.3; pointer-events: none; }
-        .recording-mode #rec-btn { opacity: 1; pointer-events: auto; }
+        #rec-btn { width: 75px; height: 75px; border-radius: 50%; border: 5px solid #fff; background: red; cursor: pointer; }
+        #rec-btn.active { border-radius: 15px; background: #fff; transform: scale(0.8); }
+        .btn-action { background: #00ffff; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -38,15 +29,15 @@
 
 <div id="app-ui">
     <div class="ui-row">
-        <input type="text" id="textInput" placeholder="輸入文字..." value="愛到你心驚驚">
-        <button class="btn-sm" id="toggleGuide">隱藏路徑球</button>
+        <input type="text" id="textInput" value="愛到你心驚驚">
+        <button class="btn-action" id="updateBtn">確認文字</button>
     </div>
     <div class="ui-row">
-        <span style="color: #00ffff; font-size: 11px;">流速調整</span>
-        <input type="range" id="speedSlider" min="1" max="50" value="8" style="width: 70%; accent-color: #00ffff;">
+        <button class="btn-action" id="toggleGuide" style="background:#555; color:#fff;">顯示/隱藏路徑</button>
+        <input type="range" id="speedSlider" min="1" max="50" value="8" style="width: 50%; accent-color: #00ffff;">
     </div>
     <div id="rec-btn"></div>
-    <button id="startCam" style="background:none; border:none; color:#aaa; font-size:10px; margin-top:5px;">啟動相機</button>
+    <button id="startCam" style="background:none; border:none; color:#00ffff; font-size:12px;">[ 1. 點此開啟相機 ]</button>
 </div>
 
 <canvas id="mix-canvas" style="display:none;"></canvas>
@@ -64,44 +55,45 @@
     import * as THREE from 'three';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARStudioFinal {
+    class ARModule {
         constructor() {
             this.config = { speed: 0.0008, showGuides: true };
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-            this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+            this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
             this.charGroups = [];
-            this.recorder = null;
-            this.chunks = [];
             this.init();
         }
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.getElementById('three-canvas').appendChild(this.renderer.domElement);
-            this.camera.position.set(0, 15, 150);
-            this.scene.add(new THREE.AmbientLight(0xffffff, 5));
+            
+            // 視角與燈光
+            this.camera.position.set(0, 0, 200);
+            this.scene.add(new THREE.AmbientLight(0xffffff, 3));
 
+            // 初始化路徑球 (確保 Z 軸在前方)
             this.points = [
-                this.createPoint(new THREE.Vector3(70, 0, -30)), 
-                this.createPoint(new THREE.Vector3(0, 0, 10)),    
-                this.createPoint(new THREE.Vector3(-70, 0, -30)) 
+                this.createPoint(new THREE.Vector3(80, 0, 50), "Start"), 
+                this.createPoint(new THREE.Vector3(0, 40, 50), "Corner"),    
+                this.createPoint(new THREE.Vector3(-80, 0, 50), "End") 
             ];
 
             const drag = new DragControls(this.points, this.camera, this.renderer.domElement);
-            drag.addEventListener('drag', () => this.updatePath());
-
+            
+            // 事件綁定
             document.getElementById('startCam').onclick = async () => {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                document.getElementById('video-bg').srcObject = stream;
+                const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                document.getElementById('video-bg').srcObject = s;
             };
 
-            document.getElementById('textInput').onblur = () => this.updateText(); // 離開焦點後再更新
+            document.getElementById('updateBtn').onclick = () => this.updateText();
             document.getElementById('speedSlider').oninput = (e) => this.config.speed = e.target.value * 0.0001;
-            document.getElementById('toggleGuide').onclick = (e) => {
+            document.getElementById('toggleGuide').onclick = () => {
                 this.config.showGuides = !this.config.showGuides;
                 this.points.forEach(p => p.visible = this.config.showGuides);
-                e.target.textContent = this.config.showGuides ? "隱藏路徑球" : "顯示路徑球";
             };
 
             document.getElementById('rec-btn').onclick = () => this.toggleRecord();
@@ -112,7 +104,10 @@
         }
 
         createPoint(pos) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(4), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6 }));
+            const m = new THREE.Mesh(
+                new THREE.SphereGeometry(8), 
+                new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8, depthTest: false })
+            );
             m.position.copy(pos);
             this.scene.add(m);
             return m;
@@ -126,20 +121,18 @@
             this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
             const text = document.getElementById('textInput').value || "";
-            
-            // 修正順序：不再反轉。第一個字 (愛) i=0，透過負的 tOffset 讓它排在最前面
             const chars = text.split(''); 
+            
             chars.forEach((c, i) => {
                 const g = new THREE.Group();
                 const tex = this.createTexture(c);
-                for (let j = 0; j < 35; j++) {
-                    const m = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.2, side: THREE.DoubleSide }));
-                    m.position.z = -j * 0.15;
-                    m.material.color.setScalar(0.4 + 0.6 * (1 - j/35));
+                for (let j = 0; j < 30; j++) {
+                    const m = new THREE.Mesh(new THREE.PlaneGeometry(18, 18), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1, side: THREE.DoubleSide }));
+                    m.position.z = -j * 0.2;
+                    m.material.color.setScalar(0.4 + 0.6 * (1 - j/30));
                     g.add(m);
                 }
-                // i 越大的字（後面的字）tOffset 越小，排在越後面
-                g.userData.tOffset = -i * 0.18; 
+                g.userData.tOffset = -i * 0.2; // 第一個字領頭
                 this.scene.add(g);
                 this.charGroups.push(g);
             });
@@ -148,76 +141,57 @@
         createTexture(char) {
             const c = document.createElement('canvas'); c.width = 512; c.height = 512;
             const ctx = c.getContext('2d');
-            ctx.font = 'bold 380px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.font = 'bold 400px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillStyle = 'white'; ctx.fillText(char, 256, 256);
             return new THREE.CanvasTexture(c);
         }
 
         animate() {
             requestAnimationFrame(() => this.animate());
+            this.updatePath();
             const time = Date.now() * this.config.speed;
             this.charGroups.forEach(g => {
-                // 從右(t=0) 到 左(t=1)
-                let t = (time + g.userData.tOffset) % 1.8 - 0.4; 
+                let t = (time + g.userData.tOffset) % 2.0 - 0.5; 
                 if (t >= 0 && t <= 1) {
                     const pos = this.curve.getPointAt(t);
-                    const tangent = this.curve.getTangentAt(t).normalize();
+                    const tan = this.curve.getTangentAt(t).normalize();
                     g.position.copy(pos);
-                    g.lookAt(pos.clone().add(tangent));
+                    g.lookAt(pos.clone().add(tan));
                     g.rotateY(Math.PI / 2);
                     g.visible = true;
                 } else g.visible = false;
             });
             this.renderer.render(this.scene, this.camera);
-            this.mixFrames(); // 每一影格都進行混合
-        }
-
-        // 混合相機與 3D 文字
-        mixFrames() {
-            const mixCanvas = document.getElementById('mix-canvas');
-            const video = document.getElementById('video-bg');
-            const threeCanvas = this.renderer.domElement;
-            
-            if (mixCanvas.width !== window.innerWidth) {
-                mixCanvas.width = window.innerWidth;
-                mixCanvas.height = window.innerHeight;
-            }
-            
-            const ctx = mixCanvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, mixCanvas.width, mixCanvas.height);
-            ctx.drawImage(threeCanvas, 0, 0, mixCanvas.width, mixCanvas.height);
         }
 
         toggleRecord() {
             const btn = document.getElementById('rec-btn');
-            const mixCanvas = document.getElementById('mix-canvas');
-
             if (!this.recorder || this.recorder.state === "inactive") {
-                document.body.classList.add('recording-mode');
-                this.chunks = [];
-                // 抓取混合後的 Canvas Stream
-                const stream = mixCanvas.captureStream(30);
-                const type = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
-                
-                this.recorder = new MediaRecorder(stream, { mimeType: type });
-                this.recorder.ondataavailable = e => this.chunks.push(e.data);
-                this.recorder.onstop = () => {
-                    const blob = new Blob(this.chunks, { type: type });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url; a.download = 'ar_complete_video.' + (type.includes('mp4') ? 'mp4' : 'webm');
-                    a.click();
-                    document.body.classList.remove('recording-mode');
-                };
-                this.recorder.start();
+                this.startRecording();
                 btn.classList.add('active');
             } else {
                 this.recorder.stop();
                 btn.classList.remove('active');
             }
         }
+
+        async startRecording() {
+            this.chunks = [];
+            // 關鍵：同時抓取相機與 3D 畫布並嘗試合併（部分手機支援 Canvas 錄製混合）
+            const stream = this.renderer.domElement.captureStream(30);
+            this.recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            this.recorder.ondataavailable = e => this.chunks.push(e.data);
+            this.recorder.onstop = () => {
+                const blob = new Blob(this.chunks, { type: 'video/webm' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'ar_video.webm'; a.click();
+            };
+            this.recorder.start();
+        }
     }
-    new ARStudioFinal();
+
+    new ARModule();
 </script>
 </body>
 </html>
