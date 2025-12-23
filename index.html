@@ -3,33 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mercedes-Benz X-Axis Alignment</title>
+    <title>3D Path Vision Engine - Mercedes Benz Edition</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
         #app-ui {
             position: absolute; top: 15px; left: 15px; z-index: 1000;
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);
-            padding: 15px; border-radius: 12px; border: 1px solid #e0e0e0;
-            display: flex; flex-direction: column; gap: 12px; width: 240px;
+            padding: 20px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex; flex-direction: column; gap: 15px; width: 250px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        .ui-row { display: flex; flex-direction: column; gap: 5px; }
-        label { color: #e0e0e0; font-size: 12px; font-weight: bold; }
-        input[type="text"] { padding: 8px; border-radius: 6px; border: none; background: #222; color: #fff; }
-        input[type="range"] { cursor: pointer; accent-color: #e0e0e0; }
+        .ui-row { display: flex; flex-direction: column; gap: 8px; }
+        label { color: #aaa; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+        input[type="text"] { padding: 10px; border-radius: 8px; border: none; background: #222; color: #fff; font-size: 14px; }
+        input[type="range"] { cursor: pointer; accent-color: #00ffff; height: 4px; }
+        #instruction { position: absolute; bottom: 20px; width: 100%; text-align: center; color: #00ffff; font-size: 12px; pointer-events: none; opacity: 0.7; }
     </style>
 </head>
 <body>
 
 <div id="app-ui">
     <div class="ui-row">
-        <label>文字內容</label>
+        <label>Display Text</label>
         <input type="text" id="textInput" value="MERCEDES-BENZ">
     </div>
     <div class="ui-row">
-        <label>行進速度</label>
+        <label>Flow Speed</label>
         <input type="range" id="speedSlider" min="1" max="100" value="15">
     </div>
+    <div style="color: #666; font-size: 10px;">Drag the glowing spheres to edit path.</div>
 </div>
+
+<div id="instruction">拖動青色球體定義起點、轉彎圓角與終點</div>
 
 <script type="importmap">
     { 
@@ -45,17 +50,16 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class XAxisPathApp {
+    // 封裝核心路徑引擎
+    class ShinjukuPathEngine {
         constructor() {
-            this.config = { speed: 0.0015, depth: 40 };
+            this.config = { speed: 0.0015, depth: 40, spacing: 0.12 };
             this.scene = new THREE.Scene();
             this.camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 1000);
-            this.renderer = new THREE.WebGLRenderer({ antialias: true });
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             this.charGroups = [];
-            this.points = [];
-            this.curve = null;
+            this.controls = [];
             this.init();
-            this.animate();
         }
 
         init() {
@@ -63,16 +67,17 @@
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(this.renderer.domElement);
 
-            this.camera.position.set(90, 40, 90);
+            this.camera.position.set(100, 50, 100);
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
             this.orbit.enableDamping = true;
 
-            this.scene.add(new THREE.AmbientLight(0xffffff, 4));
+            const ambient = new THREE.AmbientLight(0xffffff, 4);
+            this.scene.add(ambient);
 
-            // 預設路徑：起點(右)、轉點(原點)、終點(前)
-            const p1 = this.createPoint(new THREE.Vector3(70, 0, 0));
+            // 初始控制球
+            const p1 = this.createPoint(new THREE.Vector3(80, 0, 0));
             const p2 = this.createPoint(new THREE.Vector3(0, 0, 0));
-            const p3 = this.createPoint(new THREE.Vector3(0, 0, -70));
+            const p3 = this.createPoint(new THREE.Vector3(0, 0, -80));
             this.points = [p1, p2, p3];
 
             this.drag = new DragControls(this.points, this.camera, this.renderer.domElement);
@@ -80,13 +85,13 @@
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
             this.drag.addEventListener('drag', () => this.updatePath());
 
-            const speedSlider = document.getElementById('speedSlider');
-            speedSlider.oninput = (e) => this.config.speed = e.target.value * 0.0001;
-            
+            // UI 連結
+            document.getElementById('speedSlider').oninput = (e) => this.config.speed = e.target.value * 0.0001;
             document.getElementById('textInput').oninput = () => this.updateText();
 
             this.updatePath();
             this.updateText();
+            this.animate();
 
             window.addEventListener('resize', () => {
                 this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -96,17 +101,26 @@
         }
 
         createPoint(pos) {
-            const mesh = new THREE.Mesh(new THREE.SphereGeometry(2, 16, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 }));
+            const mesh = new THREE.Mesh(
+                new THREE.SphereGeometry(2.5, 16, 16), 
+                new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 })
+            );
             mesh.position.copy(pos);
             this.scene.add(mesh);
             return mesh;
         }
 
         updatePath() {
-            this.curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
+            this.curve = new THREE.QuadraticBezierCurve3(
+                this.points[0].position, 
+                this.points[1].position, 
+                this.points[2].position
+            );
             if (this.line) this.scene.remove(this.line);
-            const geometry = new THREE.BufferGeometry().setFromPoints(this.curve.getPoints(50));
-            this.line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x444444 }));
+            this.line = new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints(this.curve.getPoints(50)),
+                new THREE.LineBasicMaterial({ color: 0x333333 })
+            );
             this.scene.add(this.line);
         }
 
@@ -128,8 +142,7 @@
                     m.position.z = -(j * 0.12);
                     group.add(m);
                 }
-                // 每個字的間距 offset
-                group.userData = { tOffset: i * 0.12 }; 
+                group.userData = { tOffset: i * this.config.spacing };
                 this.scene.add(group);
                 this.charGroups.push(group);
             });
@@ -149,27 +162,16 @@
         animate() {
             requestAnimationFrame(() => this.animate());
             this.orbit.update();
-
             const time = Date.now() * this.config.speed;
 
             this.charGroups.forEach(g => {
-                // 讓文字從起點 (t=1) 往終點 (t=0) 移動，符合妳的 X 軸向
                 let t = (1.5 - (time + g.userData.tOffset) % 1.5); 
-                
                 if (t >= 0 && t <= 1) {
                     const pos = this.curve.getPointAt(t);
                     const tangent = this.curve.getTangentAt(t).normalize();
-                    
                     g.position.copy(pos);
-                    
-                    // --- 核心修正：讓文字的 X 軸與切線重疊 ---
-                    // 我們需要讓 Plane 的「面」對向路徑，這通常需要將 Y 軸作為上方向
-                    const lookAtTarget = new THREE.Vector3().addVectors(pos, tangent);
-                    g.lookAt(lookAtTarget);
-                    
-                    // 修正 lookAt 造成的 90 度偏差，讓字面平貼路徑
-                    g.rotateY(Math.PI / 2); 
-                    
+                    g.lookAt(new THREE.Vector3().addVectors(pos, tangent));
+                    g.rotateY(Math.PI / 2); // 核心：X軸與切線重疊
                     g.visible = true;
                 } else {
                     g.visible = false;
@@ -179,7 +181,7 @@
         }
     }
 
-    new XAxisPathApp();
+    new ShinjukuPathEngine();
 </script>
 </body>
 </html>
