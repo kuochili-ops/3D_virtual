@@ -3,35 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Pure AR Layer</title>
+    <title>FlipBoardAR - Cam Pro</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
         
-        /* 關鍵：相機層在最底下 */
-        #media-layer {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            z-index: 1; overflow: hidden; background: #000;
-        }
-        #bg-video, #bg-img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        
-        /* 關鍵：3D 畫布層在中間 */
-        #canvas-layer {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            z-index: 10; pointer-events: auto;
-        }
-        
-        /* 關鍵：UI 面板在最上面 */
+        /* 隱藏原生視訊元件，只供程式抓取 */
+        #video-preview { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
         #app-ui {
-            position: fixed; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
-            transition: transform 0.3s ease; padding-bottom: env(safe-area-inset-bottom);
+            position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            transition: transform 0.3s; padding-bottom: env(safe-area-inset-bottom);
         }
         #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
         
-        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; font-size: 13px; background: rgba(0,0,0,0.5); cursor: pointer; }
+        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; font-size: 13px; cursor: pointer; }
         .ui-content { padding: 10px 0 15px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 5px; }
         .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; }
+        .cam-btn { background: #ff00ff; color: #fff; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 45%; }
         #rec-btn { width: 45px; height: 45px; border: 3px solid #fff; background: red; border-radius: 50%; }
         input[type="file"] { display: none; }
@@ -39,12 +30,10 @@
 </head>
 <body>
 
-<div id="media-layer">
-    <video id="bg-video" autoplay playsinline muted loop webkit-playsinline></video>
-    <img id="bg-img">
-</div>
+<video id="video-preview" autoplay playsinline muted></video>
+<input type="file" id="media-input" accept="image/*">
 
-<div id="canvas-layer"></div>
+<div id="canvas-container"></div>
 
 <div id="app-ui">
     <div class="tab-handle" id="toggleUI">🔼 點擊展開/縮小控制台</div>
@@ -55,21 +44,20 @@
             <button class="btn" id="updateBtn">更新文字</button>
         </div>
         <div class="ui-row">
-            <span style="color:#00ffff; font-size:10px;">流速</span>
-            <input type="range" id="speedSlider" min="1" max="100" value="15" style="width: 40%;">
-            <span style="color:#00ffff; font-size:10px;">字距</span>
-            <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 40%;">
+            <button class="btn cam-btn" id="camBtn">📷 啟動/切換相機</button>
+            <button class="btn" id="openAlbum" style="background:#fff;">📂 開啟相簿</button>
+            <button class="btn" id="viewToggle" style="background:#444; color:#fff;">🔄 視角切換</button>
         </div>
         <div class="ui-row">
-            <button class="btn" id="viewToggle" style="background:#444; color:#fff;">🔄 視角切換</button>
-            <button class="btn" id="openMedia" style="background:#fff;">📂 選擇媒體</button>
+            <span style="color:#00ffff; font-size:10px;">流速</span>
+            <input type="range" id="speedSlider" min="1" max="100" value="15" style="width: 30%;">
+            <span style="color:#00ffff; font-size:10px;">字距</span>
+            <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 30%;">
             <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.3;">👁️</button>
             <div id="rec-btn"></div>
         </div>
     </div>
 </div>
-
-<input type="file" id="media-input" accept="image/*,video/*">
 
 <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
@@ -80,22 +68,20 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARUltimateApp {
+    class ARCamApp {
         constructor() {
             this.scene = new THREE.Scene();
-            // 關鍵：alpha 必須為 true 且不設背景，才能看到底下的 video
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
-            this.currentView = "front";
+            this.currentFacingMode = "environment"; // 預設後鏡頭
+            this.stream = null;
             this.init();
         }
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.setPixelRatio(window.devicePixelRatio);
-            this.renderer.setClearColor(0x000000, 0); // 透明度設為 0
-            document.getElementById('canvas-layer').appendChild(this.renderer.domElement);
-            
+            document.getElementById('canvas-container').appendChild(this.renderer.domElement);
             this.camera.position.set(0, 50, 450);
 
             this.grid = new THREE.GridHelper(600, 20, 0x00ffff, 0x333333);
@@ -104,7 +90,7 @@
 
             this.points = [
                 this.createPoint(new THREE.Vector3(180, 0, -150), 0x00ff00),
-                this.createPoint(new THREE.Vector3(0, 120, 100), 0xffff00), // 黃球
+                this.createPoint(new THREE.Vector3(0, 120, 100), 0xffff00),
                 this.createPoint(new THREE.Vector3(-180, 0, -150), 0xff0000)
             ];
 
@@ -113,21 +99,16 @@
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
-            // UI 收合按鈕
-            const ui = document.getElementById('app-ui');
-            const handle = document.getElementById('toggleUI');
-            handle.onclick = () => {
-                ui.classList.toggle('collapsed');
-                handle.innerText = ui.classList.contains('collapsed') ? "🔼 展開面板" : "🔽 隱藏面板";
-            };
-
-            document.getElementById('openMedia').onclick = () => document.getElementById('media-input').click();
-            document.getElementById('media-input').onchange = (e) => this.handleMedia(e.target.files[0]);
+            // UI 綁定
+            document.getElementById('camBtn').onclick = () => this.toggleCamera();
+            document.getElementById('openAlbum').onclick = () => document.getElementById('media-input').click();
+            document.getElementById('media-input').onchange = (e) => this.handleAlbum(e.target.files[0]);
+            document.getElementById('toggleUI').onclick = () => document.getElementById('app-ui').classList.toggle('collapsed');
             document.getElementById('viewToggle').onclick = () => this.switchView();
             document.getElementById('updateBtn').onclick = () => this.updateText();
             document.getElementById('toggleGuide').onclick = () => this.toggleHelpers();
             document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
-            
+
             this.flowSpeed = 0.0006;
             document.getElementById('speedSlider').oninput = (e) => this.flowSpeed = e.target.value * 0.00004;
 
@@ -135,22 +116,43 @@
             this.animate();
         }
 
-        handleMedia(file) {
-            if (!file) return;
-            const url = URL.createObjectURL(file);
-            const videoEl = document.getElementById('bg-video');
-            const imgEl = document.getElementById('bg-img');
-            
-            if (file.type.startsWith('video/')) {
-                imgEl.style.display = 'none';
-                videoEl.style.display = 'block'; videoEl.src = url; videoEl.play();
-            } else {
-                videoEl.style.display = 'none';
-                imgEl.style.display = 'block'; imgEl.src = url;
+        async toggleCamera() {
+            if (this.stream) {
+                // 如果已經在跑，就切換鏡頭方向
+                this.currentFacingMode = (this.currentFacingMode === "environment") ? "user" : "environment";
+                this.stream.getTracks().forEach(t => t.stop());
             }
-            // 自動隱藏輔助
+            
+            try {
+                this.stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: this.currentFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: false
+                });
+                const video = document.getElementById('video-preview');
+                video.srcObject = this.stream;
+                
+                const tex = new THREE.VideoTexture(video);
+                tex.colorSpace = THREE.SRGBColorSpace;
+                this.scene.background = tex; // 強制設為背景，保證在最底層
+                this.toggleHelpers(false);
+            } catch (err) {
+                alert("無法開啟相機，請確認權限設定。");
+            }
+        }
+
+        handleAlbum(file) {
+            if (!file) return;
+            if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                new THREE.TextureLoader().load(e.target.result, (tex) => {
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    this.scene.background = tex;
+                });
+            };
+            reader.readAsDataURL(file);
             this.toggleHelpers(false);
-            ui.classList.add('collapsed');
         }
 
         switchView() {
@@ -168,7 +170,7 @@
         createPoint(pos, color) {
             const m = new THREE.Mesh(new THREE.SphereGeometry(20), new THREE.MeshBasicMaterial({ color, depthTest: false }));
             m.position.copy(pos);
-            m.renderOrder = 9999; // 極限置頂
+            m.renderOrder = 9999;
             this.scene.add(m);
             return m;
         }
@@ -192,13 +194,11 @@
             ctx.font = 'bold 400px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.strokeStyle = 'black'; ctx.lineWidth = 15; ctx.strokeText(char, 256, 256);
             ctx.fillStyle = document.getElementById('colorPicker').value; ctx.fillText(char, 256, 256);
-            
             const tex = new THREE.CanvasTexture(canvas);
-            for (let j = 0; j < 15; j++) {
-                const m = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
+            for (let j = 0; j < 12; j++) {
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(45, 45), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
                 m.position.z = -j * 1.5;
-                m.material.opacity = (1 - j/15);
-                m.renderOrder = 500;
+                m.material.opacity = (1 - j/12);
                 g.add(m);
             }
             return g;
@@ -231,13 +231,12 @@
             if (!this.recorder || this.recorder.state === "inactive") {
                 this.chunks = [];
                 this.toggleHelpers(false);
-                const stream = this.renderer.domElement.captureStream(30);
-                this.recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                this.recorder = new MediaRecorder(this.renderer.domElement.captureStream(30), { mimeType: 'video/webm' });
                 this.recorder.ondataavailable = e => this.chunks.push(e.data);
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `Mercedes_Final.webm`; a.click();
+                    a.download = `AR_Record.webm`; a.click();
                     this.toggleHelpers(true);
                 };
                 this.recorder.start();
@@ -245,7 +244,7 @@
             } else { this.recorder.stop(); btn.style.background = "red"; }
         }
     }
-    new ARUltimateApp();
+    new ARCamApp();
 </script>
 </body>
 </html>
