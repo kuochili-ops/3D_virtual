@@ -3,59 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Fit Scale</title>
+    <title>FlipBoardAR - Stable Pro</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; touch-action: none; }
         #canvas-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
         
         #top-bar {
-            position: fixed; top: 12px; left: 0; width: 100%; z-index: 1000;
-            display: flex; justify-content: center; gap: 10px;
+            position: fixed; top: 15px; left: 0; width: 100%; z-index: 1000;
+            display: flex; justify-content: center; gap: 15px;
         }
-        .btn-top { background: #fff; color: #000; border: none; padding: 10px 18px; border-radius: 25px; font-weight: bold; font-size: 13px; }
+        .btn-top { background: #00ffff; color: #000; border: none; padding: 12px 20px; border-radius: 30px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 15px rgba(0,255,255,0.4); }
 
         #app-ui {
             position: fixed; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.8); backdrop-filter: blur(15px);
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(15px);
             transition: transform 0.3s ease; padding-bottom: env(safe-area-inset-bottom);
         }
         #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
-        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; font-size: 13px; cursor: pointer; }
-        .ui-content { padding: 5px 0 15px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; }
-        input[type="text"] { flex: 2; background: #111; color: #fff; border: 1px solid #00ffff; padding: 10px; border-radius: 8px; }
-        #rec-btn { width: 45px; height: 45px; border: 3px solid #fff; background: red; border-radius: 50%; }
+        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; font-size: 13px; cursor: pointer; border-top: 1px solid #333; }
+        .ui-content { padding: 10px 0 20px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+        .ui-row { width: 90%; display: flex; justify-content: space-between; align-items: center; }
+        input[type="text"] { flex: 2; background: #111; color: #fff; border: 1px solid #00ffff; padding: 12px; border-radius: 8px; font-size: 16px; }
+        #rec-btn { width: 55px; height: 55px; border: 4px solid #fff; background: red; border-radius: 50%; }
         
-        #media-input, video#hidden-video { display: none; }
+        #media-input, video#hidden-video { display: none; position: absolute; }
     </style>
 </head>
 <body>
 
 <div id="top-bar">
-    <button class="btn-top" id="startCam">📷 相機</button>
-    <button class="btn-top" id="openFile">📂 照片/影片</button>
+    <button class="btn-top" id="startCam">📷 開啟相機</button>
+    <button class="btn-top" id="openFile" style="background:#fff;">📂 載入媒體</button>
 </div>
 
-<video id="hidden-video" autoplay playsinline></video>
+<video id="hidden-video" playsinline muted loop webkit-playsinline></video>
 <input type="file" id="media-input" accept="image/*,video/*">
 <div id="canvas-container"></div>
 
 <div id="app-ui">
-    <div class="tab-handle" id="toggleUI">🔽 隱藏控制面板</div>
+    <div class="tab-handle" id="toggleUI">🔽 隱藏設定面板</div>
     <div class="ui-content">
         <div class="ui-row">
             <input type="text" id="textInput" value="MERCEDES-BENZ">
-            <input type="color" id="colorPicker" value="#ffffff" style="width:35px; height:35px; border:none; margin-left:10px;">
+            <input type="color" id="colorPicker" value="#ffffff" style="width:45px; height:45px; border:none; margin-left:10px; background:none;">
         </div>
         <div class="ui-row">
-            <span style="color:#00ffff; font-size:11px;">流速</span>
-            <input type="range" id="speedSlider" min="1" max="100" value="18" style="width: 35%;">
-            <span style="color:#00ffff; font-size:11px;">字距</span>
-            <input type="range" id="gapSlider" min="5" max="50" value="15" style="width: 35%;">
+            <span style="color:#00ffff; font-size:12px;">流速</span>
+            <input type="range" id="speedSlider" min="1" max="100" value="20" style="width: 35%;">
+            <span style="color:#00ffff; font-size:12px;">字距</span>
+            <input type="range" id="gapSlider" min="5" max="60" value="18" style="width: 35%;">
         </div>
         <div class="ui-row">
-            <button style="background:#444; color:#fff; border:none; padding:10px; border-radius:6px; flex:1;" id="viewToggle">🔄 視角</button>
-            <button style="background:#444; color:#fff; border:none; padding:10px; border-radius:6px; flex:1; margin:0 5px;" id="toggleGuide">👁️ 輔助</button>
+            <button style="background:#444; color:#fff; border:none; padding:12px; border-radius:8px; flex:1;" id="viewToggle">🔄 視角切換</button>
+            <button style="background:#444; color:#fff; border:none; padding:12px; border-radius:8px; flex:1; margin:0 8px;" id="toggleGuide">👁️ 輔助顯示</button>
             <div id="rec-btn"></div>
         </div>
     </div>
@@ -70,35 +70,40 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARFitApp {
+    class ARStableApp {
         constructor() {
+            this.container = document.getElementById('canvas-container');
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-            // 色彩修正
-            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-            this.renderer.toneMapping = THREE.NoToneMapping; 
-
+            
+            // 安全色彩配置
+            try {
+                this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+            } catch(e) {
+                console.warn("SRGB Not supported");
+            }
+            
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             this.charGroups = [];
-            this.flowSpeed = 0.0007;
-            this.charGap = 0.15;
+            this.flowSpeed = 0.0008;
+            this.charGap = 0.18;
             this.init();
         }
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.setPixelRatio(window.devicePixelRatio);
-            document.getElementById('canvas-container').appendChild(this.renderer.domElement);
-            this.camera.position.set(0, 50, 450);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.container.appendChild(this.renderer.domElement);
+            this.camera.position.set(0, 80, 500);
 
-            this.grid = new THREE.GridHelper(600, 20, 0x00ffff, 0x333333);
-            this.grid.position.y = -80;
+            this.grid = new THREE.GridHelper(800, 20, 0x00ffff, 0x222222);
+            this.grid.position.y = -100;
             this.scene.add(this.grid);
 
             this.points = [
-                this.createPoint(new THREE.Vector3(200, 0, -150), 0x00ff00),
-                this.createPoint(new THREE.Vector3(0, 150, 100), 0xffff00),
-                this.createPoint(new THREE.Vector3(-200, 0, -150), 0xff0000)
+                this.createPoint(new THREE.Vector3(250, 0, -150), 0x00ff00),
+                this.createPoint(new THREE.Vector3(0, 180, 150), 0xffff00),
+                this.createPoint(new THREE.Vector3(-250, 0, -150), 0xff0000)
             ];
 
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
@@ -106,36 +111,54 @@
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
-            document.getElementById('startCam').onclick = () => this.initCamera();
-            document.getElementById('openFile').onclick = () => document.getElementById('media-input').click();
-            document.getElementById('media-input').onchange = (e) => this.handleFile(e.target.files[0]);
-
+            // 事件繫結
+            document.getElementById('startCam').addEventListener('click', () => this.initCamera());
+            document.getElementById('openFile').addEventListener('click', () => document.getElementById('media-input').click());
+            document.getElementById('media-input').addEventListener('change', (e) => this.handleFile(e.target.files[0]));
+            
             const ui = document.getElementById('app-ui');
             document.getElementById('toggleUI').onclick = () => {
                 ui.classList.toggle('collapsed');
-                document.getElementById('toggleUI').innerText = ui.classList.contains('collapsed') ? "🔼 展開面板" : "🔽 隱藏面板";
+                document.getElementById('toggleUI').innerText = ui.classList.contains('collapsed') ? "🔼 展開設定" : "🔽 隱藏設定";
             };
 
-            document.getElementById('viewToggle').onclick = () => this.switchView();
-            document.getElementById('toggleGuide').onclick = () => {
-                const s = !this.grid.visible; this.grid.visible = s; this.points.forEach(p => p.visible = s);
+            document.getElementById('viewToggle').onclick = () => {
+                this.camera.position.set(this.camera.position.x === 0 ? 600 : 0, 100, 500);
+                this.camera.lookAt(0,0,0);
             };
-            document.getElementById('updateBtn')?.onclick = () => this.updateText();
+            
+            document.getElementById('toggleGuide').onclick = () => {
+                const s = !this.grid.visible;
+                this.grid.visible = s;
+                this.points.forEach(p => p.visible = s);
+            };
+
             document.getElementById('speedSlider').oninput = (e) => this.flowSpeed = e.target.value * 0.00004;
             document.getElementById('gapSlider').oninput = (e) => this.charGap = e.target.value / 100;
             document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
 
+            window.addEventListener('resize', () => this.onResize());
             this.updateText();
             this.animate();
         }
 
-        // 核心修正：等比例縮小 (Fit 模式)
+        onResize() {
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            if (this.scene.background && this.scene.background.image) {
+                this.fixTextureAspect(this.scene.background);
+            }
+        }
+
         fixTextureAspect(texture) {
+            if (!texture.image) return;
             const screenAspect = window.innerWidth / window.innerHeight;
-            const imageAspect = texture.image.width / texture.image.height;
+            const imgW = texture.image.videoWidth || texture.image.width;
+            const imgH = texture.image.videoHeight || texture.image.height;
+            const imageAspect = imgW / imgH || 1.77; // 防止 NaN
             
             texture.matrixAutoUpdate = false;
-            // 如果是橫式照片 (imageAspect > screenAspect)
             if (imageAspect > screenAspect) {
                 const scale = imageAspect / screenAspect;
                 texture.matrix.setUvTransform(0, 0, 1, scale, 0, 0.5, 0.5);
@@ -147,64 +170,73 @@
         }
 
         async initCamera() {
+            const video = document.getElementById('hidden-video');
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                const video = document.getElementById('hidden-video');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, 
+                    audio: false 
+                });
                 video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    const tex = new THREE.VideoTexture(video);
-                    tex.colorSpace = THREE.SRGBColorSpace; // 解決偏白問題
-                    this.fixTextureAspect(tex);
-                };
-            } catch (err) { alert("相機啟動失敗"); }
+                await video.play();
+                const tex = new THREE.VideoTexture(video);
+                this.fixTextureAspect(tex);
+                document.getElementById('startCam').innerText = "✅ 已啟動";
+            } catch (err) {
+                console.error(err);
+                alert("相機開啟失敗，請確保已授權權限並使用 HTTPS 連結。");
+            }
         }
 
         handleFile(file) {
             if (!file) return;
             const url = URL.createObjectURL(file);
             if (file.type.startsWith('image/')) {
-                new THREE.TextureLoader().load(url, (t) => {
-                    t.colorSpace = THREE.SRGBColorSpace;
-                    this.fixTextureAspect(t);
-                });
+                new THREE.TextureLoader().load(url, (t) => this.fixTextureAspect(t));
             } else {
                 const v = document.getElementById('hidden-video');
-                v.srcObject = null; v.src = url; v.play();
-                v.onloadedmetadata = () => {
+                v.srcObject = null;
+                v.src = url;
+                v.play().then(() => {
                     const tex = new THREE.VideoTexture(v);
-                    tex.colorSpace = THREE.SRGBColorSpace;
                     this.fixTextureAspect(tex);
-                };
+                });
             }
         }
 
         createPoint(pos, color) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(22), new THREE.MeshBasicMaterial({ color, depthTest: false }));
-            m.position.copy(pos); m.renderOrder = 9999;
-            this.scene.add(m); return m;
+            const m = new THREE.Mesh(new THREE.SphereGeometry(25), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+            m.position.copy(pos);
+            m.renderOrder = 9999;
+            this.scene.add(m);
+            return m;
         }
 
         updateText() {
             this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
-            const text = document.getElementById('textInput').value || "";
+            const text = document.getElementById('textInput').value || "MERCEDES";
+            const color = document.getElementById('colorPicker').value;
             text.split('').forEach((c, i) => {
-                const g = this.createCharGroup(c);
-                g.userData.index = i; this.scene.add(g); this.charGroups.push(g);
+                const g = this.createCharGroup(c, color);
+                g.userData.index = i;
+                this.scene.add(g);
+                this.charGroups.push(g);
             });
         }
 
-        createCharGroup(char) {
+        createCharGroup(char, color) {
             const g = new THREE.Group();
             const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-            ctx.font = 'bold 400px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.strokeStyle = 'black'; ctx.lineWidth = 15; ctx.strokeText(char, 256, 256);
-            ctx.fillStyle = document.getElementById('colorPicker').value; ctx.fillText(char, 256, 256);
+            ctx.font = 'bold 380px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 20;
+            ctx.fillStyle = color; ctx.fillText(char, 256, 256);
+            
             const tex = new THREE.CanvasTexture(canvas);
-            for (let j = 0; j < 12; j++) {
-                const m = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
-                m.position.z = -j * 1.5; m.material.opacity = (1 - j/12); g.add(m);
+            for (let j = 0; j < 10; j++) {
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.05 }));
+                m.position.z = -j * 2; m.material.opacity = (1 - j/10);
+                g.add(m);
             }
             return g;
         }
@@ -213,14 +245,17 @@
             requestAnimationFrame(() => this.animate());
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
             const baseTime = (Date.now() * this.flowSpeed) % 2.0;
+            
             this.charGroups.forEach(g => {
                 let t = (baseTime - g.userData.index * this.charGap);
-                while (t < 0) t += 2.0; t = t % 2.0;
+                while (t < 0) t += 2.0;
+                t = t % 2.0;
                 if (t >= 0 && t <= 1) {
                     const pos = curve.getPointAt(t);
                     g.position.copy(pos);
                     g.lookAt(pos.clone().add(curve.getTangentAt(t).normalize()));
-                    g.rotateY(Math.PI / 2); g.visible = true;
+                    g.rotateY(Math.PI / 2);
+                    g.visible = true;
                 } else { g.visible = false; }
             });
             this.renderer.render(this.scene, this.camera);
@@ -228,19 +263,26 @@
 
         toggleRecord(btn) {
             if (!this.recorder || this.recorder.state === "inactive") {
-                this.chunks = []; const stream = this.renderer.domElement.captureStream(30);
+                this.chunks = [];
+                const stream = this.renderer.domElement.captureStream(30);
                 this.recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                 this.recorder.ondataavailable = e => this.chunks.push(e.data);
                 this.recorder.onstop = () => {
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(new Blob(this.chunks, { type: 'video/webm' }));
-                    a.download = `Mercedes_Fix.webm`; a.click();
+                    a.download = `AR_Video.webm`; a.click();
                 };
-                this.recorder.start(); btn.style.background = "#fff";
+                this.recorder.start();
+                btn.style.background = "#fff";
             } else { this.recorder.stop(); btn.style.background = "red"; }
         }
     }
-    new ARFitApp();
+
+    // 啟動 App
+    window.onload = () => {
+        const app = new ARStableApp();
+        document.getElementById('textInput').onchange = () => app.updateText();
+    };
 </script>
 </body>
 </html>
