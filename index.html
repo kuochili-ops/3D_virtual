@@ -3,21 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR Pro - Pure Recording</title>
+    <title>𓃥白六AR字幕錄影機</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.8); padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 8px;
+            background: rgba(0,0,0,0.85); padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 8px;
         }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
         .btn { flex: 1; background: #00ffff; border: none; padding: 10px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 6px; width: 50%; font-size: 14px; }
         input[type="color"] { border: none; width: 35px; height: 35px; background: none; cursor: pointer; }
-        #rec-btn { width: 50px; height: 50px; border: 4px solid #fff; background: red; border-radius: 50%; }
+        #rec-btn { width: 50px; height: 50px; border: 4px solid #fff; background: red; border-radius: 50%; transition: 0.2s; }
         #rec-btn.recording { border-radius: 10px; background: #fff; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .label { color: #00ffff; font-size: 10px; white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -29,18 +30,18 @@
     <div class="ui-row">
         <input type="text" id="textInput" value="MERCEDES-BENZ">
         <input type="color" id="colorPicker" value="#ffffff">
-        <button class="btn" id="updateBtn">更新</button>
+        <button class="btn" id="updateBtn">更新文字</button>
     </div>
     
     <div class="ui-row">
-        <span style="color:#00ffff; font-size:10px;">速度</span>
+        <span class="label">流動速度</span>
         <input type="range" id="speedSlider" min="1" max="100" value="25" style="width: 100%; accent-color: #00ffff;">
     </div>
 
     <div class="ui-row">
-        <button class="btn" id="sideView" style="background:#555; color:#fff;">側視圖</button>
+        <button class="btn" id="sideView" style="background:#555; color:#fff;">3D 側視圖</button>
         <button class="btn" id="startCam" style="background:#fff;">📸 開啟相機</button>
-        <button class="btn" id="toggleGuide" style="background:#444; color:#fff;">顯示/隱藏球</button>
+        <button class="btn" id="toggleGuide" style="background:#444; color:#fff;">隱藏/顯示輔助</button>
         <div id="rec-btn"></div>
     </div>
 </div>
@@ -54,7 +55,7 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class MasterpieceApp {
+    class BaiLiuARApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -70,25 +71,28 @@
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
             this.camera.position.set(0, 50, 450);
 
-            // 輔助工具
+            // 1. 空間網格
             this.grid = new THREE.GridHelper(600, 30, 0x00ffff, 0x222222);
             this.grid.position.y = -100;
             this.scene.add(this.grid);
 
+            // 2. 帶投影線的 3D 端點
             this.points = [
                 this.createPoint(new THREE.Vector3(150, 0, -100), 0x00ff00),
                 this.createPoint(new THREE.Vector3(0, 100, 100), 0xffff00),
                 this.createPoint(new THREE.Vector3(-150, 0, -100), 0xff0000)
             ];
 
+            // 3. 視角控制 (空白處雙指)
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
             this.orbit.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
 
+            // 4. 拖拽控制 (單指球體)
             this.drag = new DragControls(this.points, this.camera, this.renderer.domElement);
             this.drag.addEventListener('hoveron', (e) => { this.selectedPoint = e.object; this.orbit.enabled = false; });
-            this.drag.addEventListener('hoveroff', () => this.orbit.enabled = true);
+            this.drag.addEventListener('hoveroff', () => { this.orbit.enabled = true; });
 
-            // UI 綁定
+            // 5. UI 監聽
             document.getElementById('sideView').onclick = () => { this.camera.position.set(500, 50, 0); this.camera.lookAt(0,0,0); };
             document.getElementById('startCam').onclick = () => this.startAR();
             document.getElementById('updateBtn').onclick = () => this.updateText();
@@ -101,7 +105,7 @@
             };
             document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
 
-            this.initPinchZ();
+            this.initPinchZ(); // 初始化雙指深淺控制
             this.updateText();
             this.animate();
         }
@@ -134,12 +138,14 @@
 
         async startAR() {
             const v = document.getElementById('video-source');
-            const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            v.srcObject = s; v.play();
-            this.scene.background = new THREE.VideoTexture(v);
-            this.grid.visible = false;
-            this.camera.position.set(0, 0, 450);
-            this.orbit.enabled = false;
+            try {
+                const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                v.srcObject = s; v.play();
+                this.scene.background = new THREE.VideoTexture(v);
+                this.grid.visible = false;
+                this.camera.position.set(0, 0, 450);
+                this.orbit.enabled = false;
+            } catch (e) { alert("相機開啟失敗"); }
         }
 
         updateText() {
@@ -188,7 +194,7 @@
                 } else g.visible = false;
             });
 
-            // 錄影邏輯核心：渲染前檢查是否錄影中，如果是，暫時隱藏網格
+            // 錄影純淨化邏輯：渲染瞬間隱藏輔助工具
             const isRecording = this.recorder && this.recorder.state === "recording";
             if (isRecording) {
                 this.grid.visible = false;
@@ -197,26 +203,21 @@
 
             this.renderer.render(this.scene, this.camera);
 
-            // 渲染後恢復（如果是錄影中，讓操作者還能看到球體進行微調）
-            // 注意：因為 renderer.render 是同步的，captureStream 抓到的是 render 瞬間的畫面
-            // 所以這裡恢復 visible 並不會被錄進去
             if (isRecording) {
-                this.grid.visible = false; // 錄影時通常不需要底盤
-                this.points.forEach(p => p.visible = true); 
+                this.points.forEach(p => p.visible = true);
             }
         }
 
         toggleRecord(btn) {
             if (!this.recorder || this.recorder.state === "inactive") {
                 this.chunks = [];
-                // 30 FPS 錄影
                 const stream = this.renderer.domElement.captureStream(30);
-                this.recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+                this.recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                 this.recorder.ondataavailable = e => this.chunks.push(e.data);
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `AR_Pure_${Date.now()}.webm`; a.click();
+                    a.download = `AR_BaiLiu_${Date.now()}.webm`; a.click();
                 };
                 this.recorder.start();
                 btn.classList.add('recording');
@@ -226,7 +227,7 @@
             }
         }
     }
-    new MasterpieceApp();
+    new BaiLiuARApp();
 </script>
 </body>
 </html>
