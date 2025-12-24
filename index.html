@@ -3,26 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Full Fixed</title>
+    <title>FlipBoardAR - Fix Media</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        #media-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; background: #000; }
+        
+        /* 媒體背景層 */
+        #media-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
         #bg-video, #bg-img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        
+        /* 3D 渲染層 */
         #canvas-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: auto; }
+
+        /* 關鍵修正：置頂的媒體按鈕區 */
+        #top-ui {
+            position: fixed; top: 15px; right: 15px; z-index: 999;
+            display: flex; gap: 10px;
+        }
+        .media-trigger { 
+            background: #fff; color: #000; border: none; padding: 12px 20px; 
+            border-radius: 30px; font-weight: bold; font-size: 14px; 
+            box-shadow: 0 4px 15px rgba(0,255,255,0.4);
+        }
+
+        /* 底部控制面板 */
         #app-ui {
             position: fixed; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
             transition: transform 0.3s ease; padding-bottom: env(safe-area-inset-bottom);
         }
         #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
-        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; font-size: 13px; cursor: pointer; }
-        .ui-content { padding: 10px 0 15px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 5px; }
-        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; }
-        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 45%; }
-        #rec-btn { width: 45px; height: 45px; border: 3px solid #fff; background: red; border-radius: 50%; }
         
-        /* 確保 input file 存在但不可見 */
+        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; font-size: 13px; cursor: pointer; }
+        .ui-content { padding: 10px 0 15px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; }
+        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 6px; width: 45%; }
+        #rec-btn { width: 50px; height: 50px; border: 4px solid #fff; background: red; border-radius: 50%; }
+        
         #media-input { display: none !important; }
     </style>
 </head>
@@ -31,6 +48,10 @@
 <div id="media-layer">
     <video id="bg-video" autoplay playsinline muted loop webkit-playsinline></video>
     <img id="bg-img">
+</div>
+
+<div id="top-ui">
+    <button class="media-trigger" id="openMedia">📂 選擇媒體 / 開啟相機</button>
 </div>
 
 <input type="file" id="media-input" accept="image/*,video/*">
@@ -42,19 +63,18 @@
     <div class="ui-content">
         <div class="ui-row">
             <input type="text" id="textInput" value="MERCEDES-BENZ">
-            <input type="color" id="colorPicker" value="#ffffff" style="width:25px; height:25px;">
+            <input type="color" id="colorPicker" value="#ffffff" style="width:30px; height:30px;">
             <button class="btn" id="updateBtn">更新文字</button>
         </div>
         <div class="ui-row">
-            <span style="color:#00ffff; font-size:10px;">流速</span>
+            <span style="color:#00ffff; font-size:11px;">流速</span>
             <input type="range" id="speedSlider" min="1" max="100" value="15" style="width: 40%;">
-            <span style="color:#00ffff; font-size:10px;">字距</span>
+            <span style="color:#00ffff; font-size:11px;">字距</span>
             <input type="range" id="gapSlider" min="5" max="50" value="15" style="width: 40%;">
         </div>
         <div class="ui-row">
             <button class="btn" id="viewToggle" style="background:#444; color:#fff;">🔄 視角切換</button>
-            <button class="btn" id="openMedia" style="background:#fff;">📂 選擇媒體</button>
-            <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.3;">👁️</button>
+            <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.3;">👁️ 輔助開關</button>
             <div id="rec-btn"></div>
         </div>
     </div>
@@ -69,7 +89,7 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARFullFixedApp {
+    class ARFinalApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -103,13 +123,11 @@
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
-            // 媒體選單修正：手動觸發 input
-            const openMediaBtn = document.getElementById('openMedia');
-            const mediaInput = document.getElementById('media-input');
-            openMediaBtn.onclick = () => {
-                mediaInput.click();
+            // 置頂按鈕點擊事件
+            document.getElementById('openMedia').onclick = () => {
+                document.getElementById('media-input').click();
             };
-            mediaInput.onchange = (e) => this.handleMedia(e.target.files[0]);
+            document.getElementById('media-input').onchange = (e) => this.handleMedia(e.target.files[0]);
 
             const ui = document.getElementById('app-ui');
             document.getElementById('toggleUI').onclick = (e) => {
@@ -222,15 +240,16 @@
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `Final_AR_Work.webm`; a.click();
+                    a.download = `Mercedes_Record.webm`; a.click();
                     this.toggleHelpers(true);
                 };
                 this.recorder.start();
                 btn.style.background = "#fff";
+                document.getElementById('app-ui').classList.add('collapsed');
             } else { this.recorder.stop(); btn.style.background = "red"; }
         }
     }
-    new ARFullFixedApp();
+    new ARFinalApp();
 </script>
 </body>
 </html>
