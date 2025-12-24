@@ -3,59 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Media Center</title>
+    <title>FlipBoardAR - One Touch Pro</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
-        #video-source { position: absolute; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.8) contrast(1.3); display: none; }
+        #video-source { position: absolute; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.85) contrast(1.2); display: none; }
         
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
         }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; color: #000; }
-        .view-btn { background: #444; color: #fff; }
-        .media-btn { background: #fff; color: #000; font-size: 12px; }
+        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; color: #000; text-align: center; }
+        .media-btn { background: #fff; border: 2px solid #00ffff; }
+        .view-toggle-btn { background: #444; color: #fff; border: 1px solid #666; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 6px; width: 45%; font-size: 14px; }
-        .label { color: #00ffff; font-size: 10px; }
-        #rec-btn { width: 50px; height: 50px; border: 4px solid #fff; background: red; border-radius: 50%; }
+        #rec-btn { width: 50px; height: 50px; border: 4px solid #fff; background: red; border-radius: 50%; transition: 0.3s; }
         #rec-btn.recording { border-radius: 10px; background: #fff; }
         
-        /* 隱藏的檔案選擇器 */
-        #file-input { display: none; }
+        input[type="file"] { display: none; }
     </style>
 </head>
 <body>
 
 <video id="video-source" autoplay playsinline muted loop></video>
-<input type="file" id="file-input" accept="video/*,image/*">
+<input type="file" id="input-camera" accept="video/*" capture="environment">
+<input type="file" id="input-album" accept="image/*,video/*">
+
 <div id="canvas-container"></div>
 
 <div id="app-ui">
     <div class="ui-row">
         <input type="text" id="textInput" value="MERCEDES-BENZ">
-        <input type="color" id="colorPicker" value="#ffffff" style="width:30px; height:30px; border:none; background:none;">
+        <input type="color" id="colorPicker" value="#ffffff" style="width:30px; height:30px;">
         <button class="btn" id="addOccluder" style="background:#ff00ff; color:#fff;">+ 遮蔽物</button>
         <button class="btn" id="updateBtn">更新</button>
     </div>
     
     <div class="ui-row">
-        <span class="label">流速</span>
-        <input type="range" id="speedSlider" min="1" max="100" value="15" style="width: 40%; accent-color: #00ffff;">
-        <span class="label">字距</span>
-        <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 40%; accent-color: #00ffff;">
+        <span style="color:#00ffff; font-size:10px;">流速</span>
+        <input type="range" id="speedSlider" min="1" max="100" value="15" style="width: 40%;">
+        <span style="color:#00ffff; font-size:10px;">字距</span>
+        <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 40%;">
     </div>
 
     <div class="ui-row">
-        <button class="btn view-btn" id="sideView">側面深度</button>
-        <button class="btn view-btn" id="frontView">正面 AR</button>
-        <button class="btn media-btn" id="mediaSelect">📂 開啟媒體 / 相機</button>
-        <button class="btn" id="switchCam" style="background:#ffcc00; flex:0.3;">🔄</button>
-    </div>
-
-    <div class="ui-row">
-        <button class="btn" id="toggleGuide" style="background:#666; color:#fff;">隱藏輔助</button>
+        <button class="btn view-toggle-btn" id="viewToggle">🔄 視角切換</button>
+        <button class="btn media-btn" id="mediaMenu">📂 選擇來源 (相機/相簿)</button>
+        <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.4;">👁️</button>
         <div id="rec-btn"></div>
     </div>
 </div>
@@ -69,14 +64,15 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARMediaApp {
+    class AROneTouchApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             this.charColor = new THREE.Color(0xffffff);
             this.occluders = [];
-            this.flowSpeed = 0.0006; // 初始流速調慢一倍
+            this.flowSpeed = 0.0006;
+            this.currentView = "front"; // 視角狀態
             this.init();
         }
 
@@ -102,20 +98,33 @@
             this.drag.addEventListener('hoveron', (e) => { this.selectedObj = e.object; this.orbit.enabled = false; });
             this.drag.addEventListener('hoveroff', () => this.orbit.enabled = true);
 
-            // 媒體選擇邏輯
-            document.getElementById('mediaSelect').onclick = () => {
-                const choice = confirm("點擊「確定」開啟相機，點擊「取消」從相簿/檔案選擇影片。");
-                if (choice) this.setupCamera();
-                else document.getElementById('file-input').click();
+            // 視角切換按鈕邏輯
+            document.getElementById('viewToggle').onclick = () => {
+                if (this.currentView === "front") {
+                    this.camera.position.set(600, 0, 0); // 切換到側面
+                    this.camera.lookAt(0, 0, 0);
+                    this.currentView = "side";
+                } else {
+                    this.camera.position.set(0, 50, 450); // 切換回正面
+                    this.camera.lookAt(0, 0, 0);
+                    this.currentView = "front";
+                }
             };
 
-            document.getElementById('file-input').onchange = (e) => this.handleFile(e);
+            // 媒體選單
+            document.getElementById('mediaMenu').onclick = () => {
+                const mode = prompt("請選擇來源：\n1. 開啟相機拍現場\n2. 從相簿/檔案選照片或影片", "1");
+                if (mode === "1") document.getElementById('input-camera').click();
+                else if (mode === "2") document.getElementById('input-album').click();
+            };
+
+            document.getElementById('input-camera').onchange = (e) => this.handleMedia(e.target.files[0]);
+            document.getElementById('input-album').onchange = (e) => this.handleMedia(e.target.files[0]);
+
             document.getElementById('addOccluder').onclick = () => this.addOccluder();
-            document.getElementById('sideView').onclick = () => { this.camera.position.set(600, 0, 0); this.camera.lookAt(0,0,0); };
-            document.getElementById('frontView').onclick = () => { this.camera.position.set(0, 50, 450); this.camera.lookAt(0,0,0); };
             document.getElementById('updateBtn').onclick = () => this.updateText();
             document.getElementById('colorPicker').oninput = (e) => { this.charColor.set(e.target.value); this.updateText(); };
-            document.getElementById('speedSlider').oninput = (e) => this.flowSpeed = e.target.value * 0.00004; // 更細微的速度控制
+            document.getElementById('speedSlider').oninput = (e) => this.flowSpeed = e.target.value * 0.00004;
             document.getElementById('gapSlider').oninput = (e) => { this.charGap = e.target.value / 100; this.updateText(); };
             document.getElementById('toggleGuide').onclick = () => this.toggleHelpers();
             document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
@@ -125,31 +134,28 @@
             this.animate();
         }
 
-        async setupCamera() {
-            const video = document.getElementById('video-source');
-            try {
-                this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                video.srcObject = this.stream;
-                this.applyBackground(video);
-            } catch (e) { alert("相機啟動失敗"); }
-        }
-
-        handleFile(e) {
-            const file = e.target.files[0];
+        handleMedia(file) {
             if (!file) return;
+            const url = URL.createObjectURL(file);
             const video = document.getElementById('video-source');
-            video.srcObject = null;
-            video.src = URL.createObjectURL(file);
-            video.play();
-            this.applyBackground(video);
-        }
-
-        applyBackground(video) {
-            const tex = new THREE.VideoTexture(video);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            this.scene.background = tex;
+            
+            if (file.type.startsWith('image/')) {
+                new THREE.TextureLoader().load(url, (tex) => {
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    this.scene.background = tex;
+                    video.style.display = 'none';
+                    video.pause();
+                });
+            } else {
+                video.src = url;
+                video.play();
+                const tex = new THREE.VideoTexture(video);
+                tex.colorSpace = THREE.SRGBColorSpace;
+                this.scene.background = tex;
+            }
             this.toggleHelpers(false);
-            document.getElementById('frontView').click();
+            this.camera.position.set(0, 50, 450); // 自動切回正面拍攝
+            this.currentView = "front";
             this.orbit.enabled = false;
         }
 
@@ -178,7 +184,7 @@
                     if (lastDist > 0) {
                         const delta = (d - lastDist);
                         if (this.selectedObj.userData.isOccluder) {
-                            const s = this.selectedObj.scale.x + delta * 0.01;
+                            const s = Math.max(0.1, this.selectedObj.scale.x + delta * 0.01);
                             this.selectedObj.scale.set(s, s, s);
                         } else {
                             this.selectedObj.position.z += delta * 1.5;
@@ -257,14 +263,14 @@
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `AR_Pure_Masterpiece.webm`; a.click();
+                    a.download = `AR_OneTouch.webm`; a.click();
                 };
                 this.recorder.start();
                 btn.classList.add('recording');
             } else { this.recorder.stop(); btn.classList.remove('recording'); }
         }
     }
-    new ARMediaApp();
+    new AROneTouchApp();
 </script>
 </body>
 </html>
