@@ -32,12 +32,10 @@
         <input type="color" id="colorPicker" value="#ffffff">
         <button class="btn" id="updateBtn">更新文字</button>
     </div>
-    
     <div class="ui-row">
         <span class="label">流動速度</span>
         <input type="range" id="speedSlider" min="1" max="100" value="25" style="width: 100%; accent-color: #00ffff;">
     </div>
-
     <div class="ui-row">
         <button class="btn" id="sideView" style="background:#555; color:#fff;">3D 側視圖</button>
         <button class="btn" id="startCam" style="background:#fff;">📸 開啟相機</button>
@@ -62,6 +60,7 @@
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             this.charColor = new THREE.Color(0xffffff);
             this.flowSpeed = 0.0012;
+            this.videoTexture = null;
             this.init();
         }
 
@@ -71,28 +70,23 @@
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
             this.camera.position.set(0, 50, 450);
 
-            // 1. 空間網格
             this.grid = new THREE.GridHelper(600, 30, 0x00ffff, 0x222222);
             this.grid.position.y = -100;
             this.scene.add(this.grid);
 
-            // 2. 帶投影線的 3D 端點
             this.points = [
                 this.createPoint(new THREE.Vector3(150, 0, -100), 0x00ff00),
                 this.createPoint(new THREE.Vector3(0, 100, 100), 0xffff00),
                 this.createPoint(new THREE.Vector3(-150, 0, -100), 0xff0000)
             ];
 
-            // 3. 視角控制 (空白處雙指)
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
             this.orbit.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
 
-            // 4. 拖拽控制 (單指球體)
             this.drag = new DragControls(this.points, this.camera, this.renderer.domElement);
             this.drag.addEventListener('hoveron', (e) => { this.selectedPoint = e.object; this.orbit.enabled = false; });
             this.drag.addEventListener('hoveroff', () => { this.orbit.enabled = true; });
 
-            // 5. UI 監聽
             document.getElementById('sideView').onclick = () => { this.camera.position.set(500, 50, 0); this.camera.lookAt(0,0,0); };
             document.getElementById('startCam').onclick = () => this.startAR();
             document.getElementById('updateBtn').onclick = () => this.updateText();
@@ -105,9 +99,19 @@
             };
             document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
 
-            this.initPinchZ(); // 初始化雙指深淺控制
+            window.addEventListener('resize', () => this.onWindowResize());
+            this.initPinchZ();
             this.updateText();
             this.animate();
+        }
+
+        onWindowResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            this.camera.aspect = width / height;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(width, height);
+            if(this.videoTexture) this.updateVideoAspect();
         }
 
         createPoint(pos, color) {
@@ -139,13 +143,33 @@
         async startAR() {
             const v = document.getElementById('video-source');
             try {
-                const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                v.srcObject = s; v.play();
-                this.scene.background = new THREE.VideoTexture(v);
-                this.grid.visible = false;
-                this.camera.position.set(0, 0, 450);
-                this.orbit.enabled = false;
+                const s = await navigator.mediaDevices.getUserMedia({ video: true });
+                v.srcObject = s;
+                v.onloadedmetadata = () => {
+                    v.play();
+                    this.videoTexture = new THREE.VideoTexture(v);
+                    this.scene.background = this.videoTexture;
+                    this.updateVideoAspect();
+                    this.grid.visible = false;
+                    this.camera.position.set(0, 0, 450);
+                    this.orbit.enabled = false;
+                };
             } catch (e) { alert("相機開啟失敗"); }
+        }
+
+        // 核心修正：計算影片比例，避免拉伸
+        updateVideoAspect() {
+            const video = document.getElementById('video-source');
+            const videoAspect = video.videoWidth / video.videoHeight;
+            const screenAspect = window.innerWidth / window.innerHeight;
+
+            if (screenAspect > videoAspect) {
+                this.videoTexture.repeat.set(1, videoAspect / screenAspect);
+                this.videoTexture.offset.set(0, (1 - videoAspect / screenAspect) / 2);
+            } else {
+                this.videoTexture.repeat.set(screenAspect / videoAspect, 1);
+                this.videoTexture.offset.set((1 - screenAspect / videoAspect) / 2, 0);
+            }
         }
 
         updateText() {
@@ -194,18 +218,13 @@
                 } else g.visible = false;
             });
 
-            // 錄影純淨化邏輯：渲染瞬間隱藏輔助工具
             const isRecording = this.recorder && this.recorder.state === "recording";
             if (isRecording) {
                 this.grid.visible = false;
                 this.points.forEach(p => p.visible = false);
             }
-
             this.renderer.render(this.scene, this.camera);
-
-            if (isRecording) {
-                this.points.forEach(p => p.visible = true);
-            }
+            if (isRecording) { this.points.forEach(p => p.visible = true); }
         }
 
         toggleRecord(btn) {
