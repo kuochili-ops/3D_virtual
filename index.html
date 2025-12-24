@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Sync Pro</title>
+    <title>FlipBoardAR - Full Fixed</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         #media-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; background: #000; }
         #bg-video, #bg-img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        #canvas-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
+        #canvas-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: auto; }
         #app-ui {
             position: fixed; bottom: 0; left: 0; width: 100%; z-index: 100;
             background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
@@ -21,7 +21,9 @@
         .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 45%; }
         #rec-btn { width: 45px; height: 45px; border: 3px solid #fff; background: red; border-radius: 50%; }
-        input[type="file"] { display: none; }
+        
+        /* 確保 input file 存在但不可見 */
+        #media-input { display: none !important; }
     </style>
 </head>
 <body>
@@ -30,6 +32,8 @@
     <video id="bg-video" autoplay playsinline muted loop webkit-playsinline></video>
     <img id="bg-img">
 </div>
+
+<input type="file" id="media-input" accept="image/*,video/*">
 
 <div id="canvas-layer"></div>
 
@@ -56,8 +60,6 @@
     </div>
 </div>
 
-<input type="file" id="media-input" accept="image/*,video/*">
-
 <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
 </script>
@@ -67,13 +69,15 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARSyncApp {
+    class ARFullFixedApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             this.charGroups = [];
             this.currentView = "front";
+            this.flowSpeed = 0.0006;
+            this.charGap = 0.15;
             this.init();
         }
 
@@ -99,21 +103,25 @@
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
+            // 媒體選單修正：手動觸發 input
+            const openMediaBtn = document.getElementById('openMedia');
+            const mediaInput = document.getElementById('media-input');
+            openMediaBtn.onclick = () => {
+                mediaInput.click();
+            };
+            mediaInput.onchange = (e) => this.handleMedia(e.target.files[0]);
+
             const ui = document.getElementById('app-ui');
             document.getElementById('toggleUI').onclick = (e) => {
                 ui.classList.toggle('collapsed');
                 e.target.innerText = ui.classList.contains('collapsed') ? "🔼 展開面板" : "🔽 隱藏面板";
             };
 
-            document.getElementById('openMedia').onclick = () => document.getElementById('media-input').click();
-            document.getElementById('media-input').onchange = (e) => this.handleMedia(e.target.files[0]);
             document.getElementById('viewToggle').onclick = () => this.switchView();
             document.getElementById('updateBtn').onclick = () => this.updateText();
             document.getElementById('toggleGuide').onclick = () => this.toggleHelpers();
             document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
             
-            this.flowSpeed = 0.0006;
-            this.charGap = 0.15;
             document.getElementById('speedSlider').oninput = (e) => this.flowSpeed = e.target.value * 0.00004;
             document.getElementById('gapSlider').oninput = (e) => { this.charGap = e.target.value / 100; };
 
@@ -144,7 +152,7 @@
         }
 
         createPoint(pos, color) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(20), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+            const m = new THREE.Mesh(new THREE.SphereGeometry(22), new THREE.MeshBasicMaterial({ color, depthTest: false }));
             m.position.copy(pos);
             m.renderOrder = 9999;
             this.scene.add(m);
@@ -157,7 +165,7 @@
             const text = document.getElementById('textInput').value || "";
             text.split('').forEach((c, i) => {
                 const g = this.createCharGroup(c);
-                g.userData.index = i; // 紀錄是第幾個字
+                g.userData.index = i;
                 this.scene.add(g);
                 this.charGroups.push(g);
             });
@@ -191,22 +199,16 @@
             const baseTime = (Date.now() * this.flowSpeed) % 2.0;
             
             this.charGroups.forEach(g => {
-                // 核心同步邏輯：每個字的位移嚴格等於 (基礎時間 - 索引 * 字距)
                 let t = (baseTime - g.userData.index * this.charGap);
-                
-                // 循環處理，確保文字源源不絕
                 while (t < 0) t += 2.0;
                 t = t % 2.0;
-
                 if (t >= 0 && t <= 1) {
                     const pos = curve.getPointAt(t);
                     g.position.copy(pos);
                     g.lookAt(pos.clone().add(curve.getTangentAt(t).normalize()));
                     g.rotateY(Math.PI / 2);
                     g.visible = true;
-                } else {
-                    g.visible = false;
-                }
+                } else { g.visible = false; }
             });
             this.renderer.render(this.scene, this.camera);
         }
@@ -220,7 +222,7 @@
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `Mercedes_Sync.webm`; a.click();
+                    a.download = `Final_AR_Work.webm`; a.click();
                     this.toggleHelpers(true);
                 };
                 this.recorder.start();
@@ -228,7 +230,7 @@
             } else { this.recorder.stop(); btn.style.background = "red"; }
         }
     }
-    new ARSyncApp();
+    new ARFullFixedApp();
 </script>
 </body>
 </html>
