@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - One Touch Pro</title>
+    <title>FlipBoardAR - Pure Simple</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
@@ -11,15 +11,16 @@
         
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px;
         }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; color: #000; text-align: center; }
+        .btn { flex: 1; background: #00ffff; border: none; padding: 14px 5px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; color: #000; }
         .media-btn { background: #fff; border: 2px solid #00ffff; }
-        .view-toggle-btn { background: #444; color: #fff; border: 1px solid #666; }
-        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 6px; width: 45%; font-size: 14px; }
-        #rec-btn { width: 50px; height: 50px; border: 4px solid #fff; background: red; border-radius: 50%; transition: 0.3s; }
-        #rec-btn.recording { border-radius: 10px; background: #fff; }
+        .view-btn { background: #444; color: #fff; }
+        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 12px; border-radius: 8px; width: 50%; font-size: 14px; }
+        .label { color: #00ffff; font-size: 11px; }
+        #rec-btn { width: 55px; height: 55px; border: 4px solid #fff; background: red; border-radius: 50%; }
+        #rec-btn.recording { border-radius: 12px; background: #fff; }
         
         input[type="file"] { display: none; }
     </style>
@@ -27,29 +28,27 @@
 <body>
 
 <video id="video-source" autoplay playsinline muted loop></video>
-<input type="file" id="input-camera" accept="video/*" capture="environment">
-<input type="file" id="input-album" accept="image/*,video/*">
+<input type="file" id="media-input" accept="image/*,video/*">
 
 <div id="canvas-container"></div>
 
 <div id="app-ui">
     <div class="ui-row">
         <input type="text" id="textInput" value="MERCEDES-BENZ">
-        <input type="color" id="colorPicker" value="#ffffff" style="width:30px; height:30px;">
-        <button class="btn" id="addOccluder" style="background:#ff00ff; color:#fff;">+ 遮蔽物</button>
+        <input type="color" id="colorPicker" value="#ffffff" style="width:35px; height:35px; border:none; background:none;">
         <button class="btn" id="updateBtn">更新</button>
     </div>
     
     <div class="ui-row">
-        <span style="color:#00ffff; font-size:10px;">流速</span>
-        <input type="range" id="speedSlider" min="1" max="100" value="15" style="width: 40%;">
-        <span style="color:#00ffff; font-size:10px;">字距</span>
-        <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 40%;">
+        <span class="label">流速</span>
+        <input type="range" id="speedSlider" min="1" max="100" value="15" style="width: 40%; accent-color: #00ffff;">
+        <span class="label">字距</span>
+        <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 40%; accent-color: #00ffff;">
     </div>
 
     <div class="ui-row">
-        <button class="btn view-toggle-btn" id="viewToggle">🔄 視角切換</button>
-        <button class="btn media-btn" id="mediaMenu">📂 選擇來源 (相機/相簿)</button>
+        <button class="btn view-btn" id="viewToggle">🔄 視角切換</button>
+        <button class="btn media-btn" id="openMedia">📂 選擇媒體 (相機/相簿)</button>
         <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.4;">👁️</button>
         <div id="rec-btn"></div>
     </div>
@@ -64,15 +63,14 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class AROneTouchApp {
+    class ARSimpleApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             this.charColor = new THREE.Color(0xffffff);
-            this.occluders = [];
             this.flowSpeed = 0.0006;
-            this.currentView = "front"; // 視角狀態
+            this.currentView = "front";
             this.init();
         }
 
@@ -98,30 +96,22 @@
             this.drag.addEventListener('hoveron', (e) => { this.selectedObj = e.object; this.orbit.enabled = false; });
             this.drag.addEventListener('hoveroff', () => this.orbit.enabled = true);
 
-            // 視角切換按鈕邏輯
+            // UI 邏輯
+            document.getElementById('openMedia').onclick = () => document.getElementById('media-input').click();
+            document.getElementById('media-input').onchange = (e) => this.handleMedia(e.target.files[0]);
+            
             document.getElementById('viewToggle').onclick = () => {
                 if (this.currentView === "front") {
-                    this.camera.position.set(600, 0, 0); // 切換到側面
+                    this.camera.position.set(600, 0, 0);
                     this.camera.lookAt(0, 0, 0);
                     this.currentView = "side";
                 } else {
-                    this.camera.position.set(0, 50, 450); // 切換回正面
+                    this.camera.position.set(0, 50, 450);
                     this.camera.lookAt(0, 0, 0);
                     this.currentView = "front";
                 }
             };
 
-            // 媒體選單
-            document.getElementById('mediaMenu').onclick = () => {
-                const mode = prompt("請選擇來源：\n1. 開啟相機拍現場\n2. 從相簿/檔案選照片或影片", "1");
-                if (mode === "1") document.getElementById('input-camera').click();
-                else if (mode === "2") document.getElementById('input-album').click();
-            };
-
-            document.getElementById('input-camera').onchange = (e) => this.handleMedia(e.target.files[0]);
-            document.getElementById('input-album').onchange = (e) => this.handleMedia(e.target.files[0]);
-
-            document.getElementById('addOccluder').onclick = () => this.addOccluder();
             document.getElementById('updateBtn').onclick = () => this.updateText();
             document.getElementById('colorPicker').oninput = (e) => { this.charColor.set(e.target.value); this.updateText(); };
             document.getElementById('speedSlider').oninput = (e) => this.flowSpeed = e.target.value * 0.00004;
@@ -154,7 +144,7 @@
                 this.scene.background = tex;
             }
             this.toggleHelpers(false);
-            this.camera.position.set(0, 50, 450); // 自動切回正面拍攝
+            this.camera.position.set(0, 50, 450);
             this.currentView = "front";
             this.orbit.enabled = false;
         }
@@ -167,28 +157,13 @@
             return m;
         }
 
-        addOccluder() {
-            const mesh = new THREE.Mesh(new THREE.SphereGeometry(60, 32, 32), new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.3 }));
-            mesh.position.set(0, 50, 0);
-            mesh.userData.isOccluder = true;
-            this.scene.add(mesh);
-            this.occluders.push(mesh);
-            this.drag.getObjects().push(mesh);
-        }
-
         initPinch() {
             let lastDist = 0;
             this.renderer.domElement.addEventListener('touchmove', (e) => {
                 if (e.touches.length === 2 && this.selectedObj) {
                     const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
                     if (lastDist > 0) {
-                        const delta = (d - lastDist);
-                        if (this.selectedObj.userData.isOccluder) {
-                            const s = Math.max(0.1, this.selectedObj.scale.x + delta * 0.01);
-                            this.selectedObj.scale.set(s, s, s);
-                        } else {
-                            this.selectedObj.position.z += delta * 1.5;
-                        }
+                        this.selectedObj.position.z += (d - lastDist) * 1.5;
                     }
                     lastDist = d;
                 }
@@ -229,10 +204,6 @@
             const s = forceState !== undefined ? forceState : !this.points[0].visible;
             this.points.forEach(p => p.visible = s);
             this.grid.visible = s;
-            this.occluders.forEach(occ => {
-                occ.material.colorWrite = s;
-                occ.material.opacity = s ? 0.3 : 1;
-            });
         }
 
         animate() {
@@ -263,14 +234,14 @@
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `AR_OneTouch.webm`; a.click();
+                    a.download = `AR_Pure.webm`; a.click();
                 };
                 this.recorder.start();
                 btn.classList.add('recording');
             } else { this.recorder.stop(); btn.classList.remove('recording'); }
         }
     }
-    new AROneTouchApp();
+    new ARSimpleApp();
 </script>
 </body>
 </html>
