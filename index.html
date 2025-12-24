@@ -3,22 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Pure Simple</title>
+    <title>FlipBoardAR - Vision Pro</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
-        #video-source { position: absolute; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.85) contrast(1.2); display: none; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        
+        /* 隱藏視訊元件，僅供程式抓取畫面 */
+        #video-source { display: none; }
         
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(15px); padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px;
         }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
         .btn { flex: 1; background: #00ffff; border: none; padding: 14px 5px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; color: #000; }
-        .media-btn { background: #fff; border: 2px solid #00ffff; }
+        .media-btn { background: #fff; color: #000; }
         .view-btn { background: #444; color: #fff; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 12px; border-radius: 8px; width: 50%; font-size: 14px; }
-        .label { color: #00ffff; font-size: 11px; }
         #rec-btn { width: 55px; height: 55px; border: 4px solid #fff; background: red; border-radius: 50%; }
         #rec-btn.recording { border-radius: 12px; background: #fff; }
         
@@ -27,7 +28,7 @@
 </head>
 <body>
 
-<video id="video-source" autoplay playsinline muted loop></video>
+<video id="video-source" autoplay playsinline muted loop webkit-playsinline></video>
 <input type="file" id="media-input" accept="image/*,video/*">
 
 <div id="canvas-container"></div>
@@ -40,10 +41,10 @@
     </div>
     
     <div class="ui-row">
-        <span class="label">流速</span>
-        <input type="range" id="speedSlider" min="1" max="100" value="15" style="width: 40%; accent-color: #00ffff;">
-        <span class="label">字距</span>
-        <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 40%; accent-color: #00ffff;">
+        <span style="color:#00ffff; font-size:11px;">流速</span>
+        <input type="range" id="speedSlider" min="1" max="100" value="20" style="width: 40%;">
+        <span style="color:#00ffff; font-size:11px;">字距</span>
+        <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 40%;">
     </div>
 
     <div class="ui-row">
@@ -63,13 +64,13 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARSimpleApp {
+    class ARVisionApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             this.charColor = new THREE.Color(0xffffff);
-            this.flowSpeed = 0.0006;
+            this.flowSpeed = 0.0008;
             this.currentView = "front";
             this.init();
         }
@@ -79,16 +80,17 @@
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             this.renderer.outputColorSpace = THREE.SRGBColorSpace;
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
-            this.camera.position.set(0, 50, 450);
+            this.camera.position.set(0, 80, 500); // 稍微調高位置
 
-            this.grid = new THREE.GridHelper(600, 30, 0x00ffff, 0x222222);
-            this.grid.position.y = -100;
+            this.grid = new THREE.GridHelper(800, 20, 0x00ffff, 0x333333);
+            this.grid.position.y = -50;
             this.scene.add(this.grid);
 
+            // 初始化路徑點
             this.points = [
-                this.createPoint(new THREE.Vector3(150, 0, -100), 0x00ff00),
-                this.createPoint(new THREE.Vector3(0, 100, 100), 0xffff00),
-                this.createPoint(new THREE.Vector3(-150, 0, -100), 0xff0000)
+                this.createPoint(new THREE.Vector3(200, 50, -150), 0x00ff00),
+                this.createPoint(new THREE.Vector3(0, 150, 100), 0xffff00),
+                this.createPoint(new THREE.Vector3(-200, 50, -150), 0xff0000)
             ];
 
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
@@ -96,18 +98,17 @@
             this.drag.addEventListener('hoveron', (e) => { this.selectedObj = e.object; this.orbit.enabled = false; });
             this.drag.addEventListener('hoveroff', () => this.orbit.enabled = true);
 
-            // UI 邏輯
             document.getElementById('openMedia').onclick = () => document.getElementById('media-input').click();
             document.getElementById('media-input').onchange = (e) => this.handleMedia(e.target.files[0]);
             
             document.getElementById('viewToggle').onclick = () => {
                 if (this.currentView === "front") {
-                    this.camera.position.set(600, 0, 0);
-                    this.camera.lookAt(0, 0, 0);
+                    this.camera.position.set(600, 50, 0);
+                    this.camera.lookAt(0, 50, 0);
                     this.currentView = "side";
                 } else {
-                    this.camera.position.set(0, 50, 450);
-                    this.camera.lookAt(0, 0, 0);
+                    this.camera.position.set(0, 80, 500);
+                    this.camera.lookAt(0, 50, 0);
                     this.currentView = "front";
                 }
             };
@@ -119,7 +120,6 @@
             document.getElementById('toggleGuide').onclick = () => this.toggleHelpers();
             document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
 
-            this.initPinch();
             this.updateText();
             this.animate();
         }
@@ -133,42 +133,28 @@
                 new THREE.TextureLoader().load(url, (tex) => {
                     tex.colorSpace = THREE.SRGBColorSpace;
                     this.scene.background = tex;
-                    video.style.display = 'none';
                     video.pause();
                 });
             } else {
                 video.src = url;
+                video.load(); // 確保重新載入
                 video.play();
                 const tex = new THREE.VideoTexture(video);
                 tex.colorSpace = THREE.SRGBColorSpace;
                 this.scene.background = tex;
             }
+            // 點選後自動隱藏輔助，進入拍攝感
             this.toggleHelpers(false);
-            this.camera.position.set(0, 50, 450);
+            this.camera.position.set(0, 80, 500);
             this.currentView = "front";
-            this.orbit.enabled = false;
         }
 
         createPoint(pos, color) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(12), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.8 }));
+            const m = new THREE.Mesh(new THREE.SphereGeometry(15), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.8 }));
             m.position.copy(pos);
             m.renderOrder = 999;
             this.scene.add(m);
             return m;
-        }
-
-        initPinch() {
-            let lastDist = 0;
-            this.renderer.domElement.addEventListener('touchmove', (e) => {
-                if (e.touches.length === 2 && this.selectedObj) {
-                    const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                    if (lastDist > 0) {
-                        this.selectedObj.position.z += (d - lastDist) * 1.5;
-                    }
-                    lastDist = d;
-                }
-            }, { passive: false });
-            this.renderer.domElement.addEventListener('touchend', () => lastDist = 0);
         }
 
         updateText() {
@@ -191,10 +177,10 @@
             ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 14; ctx.strokeText(char, 256, 256);
             ctx.fillStyle = 'white'; ctx.fillText(char, 256, 256);
             const tex = new THREE.CanvasTexture(canvas);
-            for (let j = 0; j < 15; j++) {
-                const m = new THREE.Mesh(new THREE.PlaneGeometry(35, 35), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1, color: this.charColor }));
-                m.position.z = -j * 1.1;
-                m.material.opacity = (1 - j/15);
+            for (let j = 0; j < 12; j++) {
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1, color: this.charColor }));
+                m.position.z = -j * 1.5;
+                m.material.opacity = (1 - j/12);
                 g.add(m);
             }
             return g;
@@ -234,14 +220,14 @@
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `AR_Pure.webm`; a.click();
+                    a.download = `AR_Result.webm`; a.click();
                 };
                 this.recorder.start();
                 btn.classList.add('recording');
             } else { this.recorder.stop(); btn.classList.remove('recording'); }
         }
     }
-    new ARSimpleApp();
+    new ARVisionApp();
 </script>
 </body>
 </html>
