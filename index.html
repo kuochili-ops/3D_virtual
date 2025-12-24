@@ -3,18 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR Pro - Depth Visualizer</title>
+    <title>AR Studio - Pro Custom</title>
     <style>
-        body { margin: 0; background: #050505; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.85); padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
+            background: rgba(0,0,0,0.8); padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 8px;
         }
-        .ui-row { width: 92%; display: flex; justify-content: space-around; gap: 10px; }
-        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; }
-        .view-btn { background: #555; color: #fff; }
-        input[type="text"] { background: #000; border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 6px; width: 80%; margin-bottom: 5px; }
+        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .label { color: #00ffff; font-size: 11px; white-space: nowrap; }
+        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 4px; width: 50%; }
+        input[type="color"] { border: none; width: 35px; height: 35px; background: none; cursor: pointer; }
+        .btn { background: #00ffff; border: none; padding: 10px; border-radius: 5px; font-weight: bold; font-size: 11px; flex: 1; }
+        #rec-btn { width: 50px; height: 50px; border: 3px solid #fff; background: red; border-radius: 50%; transition: 0.2s; }
+        #rec-btn.recording { border-radius: 10px; background: #fff; transform: scale(0.8); }
     </style>
 </head>
 <body>
@@ -23,15 +26,24 @@
 <div id="canvas-container"></div>
 
 <div id="app-ui">
-    <input type="text" id="textInput" value="愛到你心驚驚">
     <div class="ui-row">
-        <button class="btn view-btn" id="sideView">側視圖(看深度)</button>
-        <button class="btn view-btn" id="frontView">正視圖(AR)</button>
-        <button class="btn" id="startCam" style="background: #fff;">📸 開啟相機</button>
+        <input type="text" id="textInput" value="MERCEDES-BENZ">
+        <div style="display:flex; align-items:center; gap:5px;">
+            <span class="label">顏色</span>
+            <input type="color" id="colorPicker" value="#ffffff">
+        </div>
+        <button class="btn" id="updateBtn">更新</button>
     </div>
-    <div class="ui-row" style="margin-top:5px;">
-        <div id="rec-btn" style="width:45px; height:45px; border:3px solid #fff; background:red; border-radius:50%;"></div>
-        <span style="color:#00ffff; font-size:10px;">💡 選中球體：單指平移 X/Y，雙指撐開控 Z 軸深淺</span>
+    
+    <div class="ui-row">
+        <span class="label">流速</span>
+        <input type="range" id="speedSlider" min="1" max="100" value="20" style="width: 100%; accent-color: #00ffff;">
+    </div>
+
+    <div class="ui-row">
+        <button class="btn" id="startCam" style="background:#fff;">📸 開啟相機/微調</button>
+        <button class="btn" id="toggleGuide" style="background:#444; color:#fff;">隱藏控制球</button>
+        <div id="rec-btn"></div>
     </div>
 </div>
 
@@ -44,45 +56,52 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class DepthARApp {
+    class ProCustomAR {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
+            this.charColor = new THREE.Color(0xffffff);
+            this.flowSpeed = 0.001;
             this.init();
         }
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
-            this.camera.position.set(0, 50, 450);
+            this.camera.position.set(0, 100, 400);
 
-            // 1. 3D 空間參考
-            this.grid = new THREE.GridHelper(600, 30, 0x00ffff, 0x222222);
-            this.grid.position.y = -100;
+            this.grid = new THREE.GridHelper(600, 20, 0x00ffff, 0x222222);
+            this.grid.position.y = -80;
             this.scene.add(this.grid);
 
-            // 2. 建立端點與深度指引線
             this.points = [
-                this.createPoint(new THREE.Vector3(120, 0, -100), 0x00ff00), // 起點推遠
-                this.createPoint(new THREE.Vector3(0, 80, 50), 0xffff00),     // 彎點拉近
-                this.createPoint(new THREE.Vector3(-120, 0, -100), 0xff0000) // 終點推遠
+                this.createPoint(new THREE.Vector3(120, 0, 0), 0x00ff00),
+                this.createPoint(new THREE.Vector3(0, 80, 50), 0xffff00),
+                this.createPoint(new THREE.Vector3(-120, 0, 0), 0xff0000)
             ];
 
-            // 3. 視角與拖拽
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
-            this.orbit.enableDamping = true;
             this.orbit.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
 
             this.drag = new DragControls(this.points, this.camera, this.renderer.domElement);
             this.drag.addEventListener('hoveron', (e) => { this.selectedPoint = e.object; this.orbit.enabled = false; });
-            this.drag.addEventListener('hoveroff', () => { this.orbit.enabled = true; });
+            this.drag.addEventListener('hoveroff', () => this.orbit.enabled = true);
 
-            // 4. UI 互動
-            document.getElementById('sideView').onclick = () => { this.camera.position.set(500, 50, 0); this.camera.lookAt(0,0,0); };
-            document.getElementById('frontView').onclick = () => { this.camera.position.set(0, 50, 450); this.camera.lookAt(0,0,0); };
+            // UI 監聽
+            document.getElementById('updateBtn').onclick = () => this.updateText();
+            document.getElementById('colorPicker').oninput = (e) => {
+                this.charColor.set(e.target.value);
+                this.updateText();
+            };
+            document.getElementById('speedSlider').oninput = (e) => this.flowSpeed = e.target.value * 0.00005;
             document.getElementById('startCam').onclick = () => this.startAR();
-            document.getElementById('textInput').onchange = () => this.updateText();
+            document.getElementById('toggleGuide').onclick = (e) => {
+                const visible = !this.points[0].visible;
+                this.points.forEach(p => p.visible = visible);
+                e.target.innerText = visible ? "隱藏控制球" : "顯示控制球";
+            };
+            document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
 
             this.initPinchZ();
             this.updateText();
@@ -90,20 +109,11 @@
         }
 
         createPoint(pos, color) {
-            const group = new THREE.Group();
-            const sphere = new THREE.Mesh(new THREE.SphereGeometry(15), new THREE.MeshBasicMaterial({ color: color, depthTest: false }));
-            
-            // 垂直指引線：連到網格面
-            const lineMat = new THREE.LineDashedMaterial({ color: color, dashSize: 5, gapSize: 3 });
-            const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,-200,0)]);
-            const line = new THREE.Line(lineGeo, lineMat);
-            line.computeLineDistances();
-            
-            sphere.add(line); 
-            sphere.position.copy(pos);
-            sphere.renderOrder = 999;
-            this.scene.add(sphere);
-            return sphere;
+            const m = new THREE.Mesh(new THREE.SphereGeometry(15), new THREE.MeshBasicMaterial({ color: color, depthTest: false }));
+            m.position.copy(pos);
+            m.renderOrder = 999;
+            this.scene.add(m);
+            return m;
         }
 
         initPinchZ() {
@@ -111,9 +121,7 @@
             this.renderer.domElement.addEventListener('touchmove', (e) => {
                 if (e.touches.length === 2 && this.selectedPoint) {
                     const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                    if (lastDist > 0) {
-                        this.selectedPoint.position.z += (d - lastDist) * 0.8;
-                    }
+                    if (lastDist > 0) this.selectedPoint.position.z += (d - lastDist) * 1.2;
                     lastDist = d;
                 }
             }, { passive: false });
@@ -126,8 +134,8 @@
             v.srcObject = s; v.play();
             this.scene.background = new THREE.VideoTexture(v);
             this.grid.visible = false;
-            this.points.forEach(p => p.children[0].visible = false); // 隱藏指引線
-            document.getElementById('frontView').click();
+            // 相機開啟後切換至「實景模式視角」，但保留 DragControls
+            this.camera.position.set(0, 0, 450);
             this.orbit.enabled = false;
         }
 
@@ -148,12 +156,15 @@
             const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
             ctx.font = 'bold 400px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillStyle = 'white'; ctx.fillText(char, 256, 256);
+            ctx.fillStyle = 'white'; // 保持 Canvas 原始為白
+            ctx.fillText(char, 256, 256);
             const tex = new THREE.CanvasTexture(canvas);
             for (let j = 0; j < 25; j++) {
-                const m = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshBasicMaterial({ 
+                    map: tex, transparent: true, alphaTest: 0.1, color: this.charColor // 使用自訂顏色
+                }));
                 m.position.z = -j * 0.5;
-                m.material.color.setScalar(0.4 + 0.6 * (1 - j/25));
+                m.material.opacity = (1 - j/25);
                 g.add(m);
             }
             return g;
@@ -161,9 +172,8 @@
 
         animate() {
             requestAnimationFrame(() => this.animate());
-            this.orbit.update();
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
-            const time = Date.now() * 0.0008;
+            const time = Date.now() * this.flowSpeed;
             this.charGroups.forEach(g => {
                 let t = (time + g.userData.tOffset) % 2.0 - 0.5; 
                 if (t >= 0 && t <= 1) {
@@ -177,8 +187,27 @@
             });
             this.renderer.render(this.scene, this.camera);
         }
+
+        toggleRecord(btn) {
+            if (!this.recorder || this.recorder.state === "inactive") {
+                this.chunks = [];
+                const stream = this.renderer.domElement.captureStream(30);
+                this.recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                this.recorder.ondataavailable = e => this.chunks.push(e.data);
+                this.recorder.onstop = () => {
+                    const blob = new Blob(this.chunks, { type: 'video/webm' });
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                    a.download = 'ar_pro_custom.webm'; a.click();
+                };
+                this.recorder.start();
+                btn.classList.add('recording');
+            } else {
+                this.recorder.stop();
+                btn.classList.remove('recording');
+            }
+        }
     }
-    new DepthARApp();
+    new ProCustomAR();
 </script>
 </body>
 </html>
