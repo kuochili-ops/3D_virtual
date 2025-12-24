@@ -3,50 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>𓃥白六AR字幕錄影機</title>
+    <title>FlipBoardAR - Occlusion Pro</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
+        #video-source { position: absolute; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.75) contrast(1.4) saturate(1.2); display: none; }
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.85); padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(15px); padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 8px;
         }
-        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-        .btn { flex: 1; background: #00ffff; border: none; padding: 10px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; color: #000; text-align: center; }
-        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 6px; width: 45%; font-size: 14px; }
-        input[type="color"] { border: none; width: 35px; height: 35px; background: none; cursor: pointer; }
+        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 5px; }
+        .btn { flex: 1; background: #00ffff; border: none; padding: 10px 2px; border-radius: 6px; font-weight: bold; font-size: 10px; cursor: pointer; color: #000; }
+        .view-btn { background: #444; color: #fff; }
+        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 45%; font-size: 14px; }
+        input[type="color"] { border: none; width: 30px; height: 30px; background: none; }
         #rec-btn { width: 45px; height: 45px; border: 4px solid #fff; background: red; border-radius: 50%; }
-        #rec-btn.recording { border-radius: 10px; background: #fff; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .label { color: #00ffff; font-size: 10px; white-space: nowrap; width: 40px; }
-        .slider-group { flex: 1; display: flex; align-items: center; gap: 5px; }
-        input[type="range"] { flex: 1; accent-color: #00ffff; }
-        #fileInput { display: none; }
+        #rec-btn.recording { border-radius: 10px; background: #fff; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
 
-<video id="video-source" autoplay playsinline muted style="display:none;"></video>
-<input type="file" id="fileInput" accept="image/*">
+<video id="video-source" autoplay playsinline muted></video>
 <div id="canvas-container"></div>
 
 <div id="app-ui">
     <div class="ui-row">
-        <input type="text" id="textInput" value="你好我吃一口聖誕快樂">
+        <input type="text" id="textInput" value="MERCEDES-BENZ">
         <input type="color" id="colorPicker" value="#ffffff">
-        <button class="btn" id="updateBtn">更新文字</button>
+        <button class="btn" id="addOccluder" style="background:#ff00ff; color:#fff;">+ 遮蔽物</button>
+        <button class="btn" id="updateBtn">更新</button>
     </div>
-    
     <div class="ui-row">
-        <div class="slider-group"><span class="label">流速</span><input type="range" id="speedSlider" min="1" max="100" value="25"></div>
-        <div class="slider-group"><span class="label">字距</span><input type="range" id="spacingSlider" min="5" max="80" value="25"></div>
+        <span style="color:#00ffff; font-size:9px;">字距</span>
+        <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 35%;">
+        <button class="btn view-btn" id="sideView">側面</button>
+        <button class="btn view-btn" id="frontView">正面</button>
+        <button class="btn" id="switchCam" style="background:#ffcc00;">🔄</button>
     </div>
-
     <div class="ui-row">
-        <button class="btn" id="viewToggle" style="background:#555; color:#fff;">🔭 正/側</button>
-        <label for="fileInput" class="btn" style="background:#ff00ff; color:#fff;">🖼️ 傳照片</label>
-        <button class="btn" id="startCam" style="background:#fff;">📸 相機</button>
-        <button class="btn" id="toggleGuide" style="background:#444; color:#fff;">輔助</button>
+        <button class="btn" id="startCam" style="background:#fff;">📸 開啟相機</button>
+        <button class="btn" id="toggleGuide" style="background:#666; color:#fff;">隱藏輔助</button>
         <div id="rec-btn"></div>
     </div>
 </div>
@@ -60,23 +57,20 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class BaiLiuARApp {
+    class AROcclusionApp {
         constructor() {
             this.scene = new THREE.Scene();
-            this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             this.charColor = new THREE.Color(0xffffff);
-            this.flowSpeed = 0.0012;
-            this.charSpacing = 0.25;
-            this.bgTexture = null;
-            this.isFrontView = true;
+            this.occluders = [];
             this.init();
         }
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
             this.camera.position.set(0, 50, 450);
 
@@ -84,6 +78,7 @@
             this.grid.position.y = -100;
             this.scene.add(this.grid);
 
+            // 路徑控制點
             this.points = [
                 this.createPoint(new THREE.Vector3(150, 0, -100), 0x00ff00),
                 this.createPoint(new THREE.Vector3(0, 100, 100), 0xffff00),
@@ -91,125 +86,84 @@
             ];
 
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
-            this.orbit.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
-
-            this.drag = new DragControls(this.points, this.camera, this.renderer.domElement);
-            this.drag.addEventListener('hoveron', (e) => { this.selectedPoint = e.object; this.orbit.enabled = false; });
+            this.drag = new DragControls([...this.points], this.camera, this.renderer.domElement);
+            this.drag.addEventListener('hoveron', (e) => { this.selectedObj = e.object; this.orbit.enabled = false; });
             this.drag.addEventListener('hoveroff', () => this.orbit.enabled = true);
 
-            document.getElementById('viewToggle').onclick = () => this.toggleView();
-            document.getElementById('startCam').onclick = () => this.startAR();
-            document.getElementById('fileInput').onchange = (e) => this.loadPhoto(e);
+            // UI 綁定
+            document.getElementById('addOccluder').onclick = () => this.addOccluder();
+            document.getElementById('sideView').onclick = () => { this.camera.position.set(600, 0, 0); this.camera.lookAt(0,0,0); };
+            document.getElementById('frontView').onclick = () => { this.camera.position.set(0, 50, 450); this.camera.lookAt(0,0,0); };
+            document.getElementById('startCam').onclick = () => this.setupCamera();
+            document.getElementById('switchCam').onclick = () => this.switchCamera();
             document.getElementById('updateBtn').onclick = () => this.updateText();
             document.getElementById('colorPicker').oninput = (e) => { this.charColor.set(e.target.value); this.updateText(); };
-            document.getElementById('speedSlider').oninput = (e) => this.flowSpeed = e.target.value * 0.00005;
-            document.getElementById('spacingSlider').oninput = (e) => { this.charSpacing = e.target.value / 100; this.updateText(); };
-            document.getElementById('toggleGuide').onclick = () => {
-                const s = !this.points[0].visible;
-                this.points.forEach(p => p.visible = s);
-                this.grid.visible = s;
-            };
+            document.getElementById('gapSlider').oninput = (e) => { this.charGap = e.target.value / 100; this.updateText(); };
+            document.getElementById('toggleGuide').onclick = () => this.toggleHelpers();
             document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
 
-            window.addEventListener('resize', () => this.onWindowResize());
-            this.initPinchZ();
+            this.initPinch();
             this.updateText();
             this.animate();
         }
 
-        toggleView() {
-            if (this.isFrontView) this.camera.position.set(500, 50, 0);
-            else this.camera.position.set(0, 50, 450);
-            this.camera.lookAt(0, 0, 0);
-            this.isFrontView = !this.isFrontView;
-        }
-
-        // 新增功能：載入靜態照片
-        loadPhoto(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const tex = new THREE.Texture(img);
-                    tex.needsUpdate = true;
-                    tex.colorSpace = THREE.SRGBColorSpace;
-                    this.scene.background = tex;
-                    this.bgTexture = tex;
-                    this.updateBgAspect(img.width, img.height);
-                    // 暫停影片源
-                    const v = document.getElementById('video-source');
-                    if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-
-        async startAR() {
-            const v = document.getElementById('video-source');
-            if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
-            try {
-                const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                v.srcObject = s;
-                v.onloadedmetadata = () => {
-                    v.play();
-                    const tex = new THREE.VideoTexture(v);
-                    tex.colorSpace = THREE.SRGBColorSpace;
-                    this.scene.background = tex;
-                    this.bgTexture = tex;
-                    this.updateBgAspect(v.videoWidth, v.videoHeight);
-                };
-            } catch (e) { alert("相機啟動失敗"); }
-        }
-
-        updateBgAspect(w, h) {
-            if (!this.bgTexture || w === 0) return;
-            const bgAspect = w / h;
-            const screenAspect = window.innerWidth / window.innerHeight;
-            if (screenAspect > bgAspect) {
-                this.bgTexture.repeat.set(1, bgAspect / screenAspect);
-                this.bgTexture.offset.set(0, (1 - bgAspect / screenAspect) / 2);
-            } else {
-                this.bgTexture.repeat.set(screenAspect / bgAspect, 1);
-                this.bgTexture.offset.set((1 - screenAspect / bgAspect) / 2, 0);
-            }
-        }
-
-        onWindowResize() {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-            // 由於背景可能是影片或照片，這裡需要重新取得尺寸更新
-            const v = document.getElementById('video-source');
-            if (this.bgTexture && v.srcObject) this.updateBgAspect(v.videoWidth, v.videoHeight);
-        }
-
         createPoint(pos, color) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(15), new THREE.MeshBasicMaterial({ color: color, depthTest: false, transparent: true, opacity: 0.8 }));
-            const line = new THREE.Line(
-                new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,-400,0)]),
-                new THREE.LineDashedMaterial({ color: color, dashSize: 5, gapSize: 3 })
-            );
-            line.computeLineDistances();
-            m.add(line); 
+            const m = new THREE.Mesh(new THREE.SphereGeometry(12), new THREE.MeshBasicMaterial({ color: color, depthTest: false, transparent: true, opacity: 0.8 }));
             m.position.copy(pos);
             m.renderOrder = 999;
             this.scene.add(m);
             return m;
         }
 
-        initPinchZ() {
+        addOccluder() {
+            // 建立一個遮蔽球：關鍵在於 colorWrite: false
+            const geo = new THREE.SphereGeometry(60, 32, 32);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.3 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(0, 50, 0);
+            mesh.userData.isOccluder = true;
+            this.scene.add(mesh);
+            this.occluders.push(mesh);
+            
+            // 更新 DragControls 讓新球可以被拖動
+            this.drag.getObjects().push(mesh);
+            alert("已新增遮蔽球！請將它移動到主體位置，並用雙指縮放大小。");
+        }
+
+        initPinch() {
             let lastDist = 0;
             this.renderer.domElement.addEventListener('touchmove', (e) => {
-                if (e.touches.length === 2 && this.selectedPoint) {
+                if (e.touches.length === 2 && this.selectedObj) {
                     const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                    if (lastDist > 0) this.selectedPoint.position.z += (d - lastDist) * 1.5;
+                    if (lastDist > 0) {
+                        const delta = (d - lastDist);
+                        if (this.selectedObj.userData.isOccluder) {
+                            // 遮蔽球：雙指縮放大小
+                            const s = this.selectedObj.scale.x + delta * 0.01;
+                            this.selectedObj.scale.set(s, s, s);
+                        } else {
+                            // 路徑點：雙指調整 Z 軸
+                            this.selectedObj.position.z += delta * 1.5;
+                        }
+                    }
                     lastDist = d;
                 }
             }, { passive: false });
             this.renderer.domElement.addEventListener('touchend', () => lastDist = 0);
+        }
+
+        async setupCamera() {
+            const video = document.getElementById('video-source');
+            try {
+                this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: 1280, height: 720 } });
+                video.srcObject = this.stream;
+                const tex = new THREE.VideoTexture(video);
+                tex.colorSpace = THREE.SRGBColorSpace;
+                this.scene.background = tex;
+                this.toggleHelpers(false);
+                document.getElementById('frontView').click();
+                this.orbit.enabled = false;
+            } catch (e) { alert("相機啟動失敗"); }
         }
 
         updateText() {
@@ -218,7 +172,7 @@
             const text = document.getElementById('textInput').value || "";
             text.split('').forEach((c, i) => {
                 const g = this.createCharGroup(c);
-                g.userData.tOffset = -i * this.charSpacing; 
+                g.userData.tOffset = -i * (this.charGap || 0.35);
                 this.scene.add(g);
                 this.charGroups.push(g);
             });
@@ -229,62 +183,70 @@
             const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
             ctx.font = 'bold 400px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 14; ctx.strokeText(char, 256, 256);
             ctx.fillStyle = 'white'; ctx.fillText(char, 256, 256);
             const tex = new THREE.CanvasTexture(canvas);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            for (let j = 0; j < 25; j++) {
-                const m = new THREE.Mesh(new THREE.PlaneGeometry(35, 35), new THREE.MeshBasicMaterial({ 
-                    map: tex, transparent: true, alphaTest: 0.1, color: this.charColor 
-                }));
-                m.position.z = -j * 0.6;
-                m.material.opacity = (1 - j/25);
+            for (let j = 0; j < 15; j++) {
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(35, 35), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1, color: this.charColor }));
+                m.position.z = -j * 1.1;
+                m.material.opacity = (1 - j/15);
                 g.add(m);
             }
             return g;
         }
 
+        toggleHelpers(forceState) {
+            const s = forceState !== undefined ? forceState : !this.points[0].visible;
+            this.points.forEach(p => p.visible = s);
+            this.grid.visible = s;
+            // 遮蔽球處理：隱藏時進入「隱形遮蔽模式」
+            this.occluders.forEach(occ => {
+                if (s) {
+                    occ.material.colorWrite = true; // 編輯模式：看得見深藍色球
+                    occ.material.opacity = 0.3;
+                } else {
+                    occ.material.colorWrite = false; // 錄影/拍攝模式：看不見球，但會遮擋後方物體
+                }
+            });
+        }
+
         animate() {
             requestAnimationFrame(() => this.animate());
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
-            const time = Date.now() * this.flowSpeed;
+            const time = Date.now() * 0.0012;
             this.charGroups.forEach(g => {
-                const totalLength = 1.0 + (this.charGroups.length * this.charSpacing);
-                let t = (time + g.userData.tOffset) % totalLength - 0.5; 
+                let t = (time + g.userData.tOffset) % 2.0 - 0.5; 
                 if (t >= 0 && t <= 1) {
                     const pos = curve.getPointAt(t);
-                    const tan = curve.getTangentAt(t).normalize();
                     g.position.copy(pos);
-                    g.lookAt(pos.clone().add(tan));
+                    g.lookAt(pos.clone().add(curve.getTangentAt(t).normalize()));
                     g.rotateY(Math.PI / 2);
                     g.visible = true;
                 } else g.visible = false;
             });
+
             const isRec = this.recorder && this.recorder.state === "recording";
-            if (isRec) { this.grid.visible = false; this.points.forEach(p => p.visible = false); }
+            if (isRec) this.toggleHelpers(false);
             this.renderer.render(this.scene, this.camera);
-            if (isRec) { this.points.forEach(p => p.visible = true); }
+            if (isRec) this.toggleHelpers(true);
         }
 
         toggleRecord(btn) {
             if (!this.recorder || this.recorder.state === "inactive") {
                 this.chunks = [];
-                const stream = this.renderer.domElement.captureStream(30);
-                this.recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                this.recorder = new MediaRecorder(this.renderer.domElement.captureStream(30), { mimeType: 'video/webm' });
                 this.recorder.ondataavailable = e => this.chunks.push(e.data);
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `AR_BaiLiu_${Date.now()}.webm`; a.click();
+                    a.download = `AR_Occlusion_${Date.now()}.webm`; a.click();
                 };
                 this.recorder.start();
                 btn.classList.add('recording');
-            } else {
-                this.recorder.stop();
-                btn.classList.remove('recording');
-            }
+            } else { this.recorder.stop(); btn.classList.remove('recording'); }
         }
     }
-    new BaiLiuARApp();
+    new AROcclusionApp();
 </script>
 </body>
 </html>
