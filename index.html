@@ -3,24 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Perfect Module</title>
+    <title>FlipBoardAR - Pro Color</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
-        #video-source { position: absolute; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.8) contrast(1.2); display: none; }
+        
+        /* 核心修正：強化對比與飽和度，壓低亮度解決偏白 */
+        #video-source { 
+            position: absolute; width: 100%; height: 100%; object-fit: cover; 
+            filter: brightness(0.75) contrast(1.4) saturate(1.3); 
+            display: none; 
+        }
+        
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(15px); padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
         }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-        .btn { flex: 1; background: #00ffff; border: none; padding: 10px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; color: #000; text-align: center; }
-        .view-btn { background: #555; color: #fff; }
+        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; color: #000; }
+        .view-btn { background: #444; color: #fff; border: 1px solid #666; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 10px; border-radius: 6px; width: 50%; font-size: 14px; }
         input[type="color"] { border: none; width: 35px; height: 35px; background: none; cursor: pointer; }
         .label { color: #00ffff; font-size: 10px; white-space: nowrap; }
         #rec-btn { width: 50px; height: 50px; border: 4px solid #fff; background: red; border-radius: 50%; }
         #rec-btn.recording { border-radius: 10px; background: #fff; animation: pulse 1s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
@@ -38,16 +45,16 @@
         <span class="label">流速</span>
         <input type="range" id="speedSlider" min="1" max="100" value="25" style="width: 40%; accent-color: #00ffff;">
         <span class="label">字距</span>
-        <input type="range" id="gapSlider" min="15" max="80" value="35" style="width: 40%; accent-color: #00ffff;">
+        <input type="range" id="gapSlider" min="15" max="85" value="35" style="width: 40%; accent-color: #00ffff;">
     </div>
     <div class="ui-row">
-        <button class="btn view-btn" id="sideView">側面深度</button>
-        <button class="btn view-btn" id="frontView">正面 AR</button>
-        <button class="btn" id="switchCam" style="background:#ffcc00;">切換鏡頭</button>
+        <button class="btn view-btn" id="sideView">側面 (調深度)</button>
+        <button class="btn view-btn" id="frontView">正面 (AR)</button>
+        <button class="btn" id="switchCam" style="background:#ffcc00;">🔄 切換鏡頭</button>
     </div>
     <div class="ui-row">
         <button class="btn" id="startCam" style="background:#fff;">📸 開啟相機</button>
-        <button class="btn" id="toggleGuide" style="background:#444; color:#fff;">輔助隱藏</button>
+        <button class="btn" id="toggleGuide" style="background:#666; color:#fff;">輔助開關</button>
         <div id="rec-btn"></div>
     </div>
 </div>
@@ -61,7 +68,7 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARPerfectModule {
+    class ARColorPro {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
@@ -76,7 +83,10 @@
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            // 修正色彩空間渲染
+            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+            
             this.camera.position.set(0, 50, 450);
 
             this.grid = new THREE.GridHelper(600, 30, 0x00ffff, 0x222222);
@@ -120,9 +130,13 @@
             const video = document.getElementById('video-source');
             if (this.stream) this.stream.getTracks().forEach(t => t.stop());
             try {
-                this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: this.facingMode, width: 1280, height: 720 } });
+                this.stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: this.facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } } 
+                });
                 video.srcObject = this.stream;
-                this.scene.background = new THREE.VideoTexture(video);
+                const tex = new THREE.VideoTexture(video);
+                tex.colorSpace = THREE.SRGBColorSpace; // 重要：確保 Texture 色彩正確
+                this.scene.background = tex;
                 this.grid.visible = false;
                 document.getElementById('frontView').click();
                 this.orbit.enabled = false;
@@ -171,11 +185,14 @@
             const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
             ctx.font = 'bold 400px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 12; ctx.strokeText(char, 256, 256);
+            // 加深描邊顏色與寬度
+            ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 18; ctx.strokeText(char, 256, 256);
             ctx.fillStyle = 'white'; ctx.fillText(char, 256, 256);
             const tex = new THREE.CanvasTexture(canvas);
             for (let j = 0; j < 15; j++) {
-                const m = new THREE.Mesh(new THREE.PlaneGeometry(35, 35), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1, color: this.charColor }));
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(35, 35), new THREE.MeshBasicMaterial({ 
+                    map: tex, transparent: true, alphaTest: 0.1, color: this.charColor 
+                }));
                 m.position.z = -j * 1.1;
                 m.material.opacity = (1 - j/15);
                 g.add(m);
@@ -198,10 +215,10 @@
                     g.visible = true;
                 } else g.visible = false;
             });
-            const isRecording = this.recorder && this.recorder.state === "recording";
-            if (isRecording) { this.grid.visible = false; this.points.forEach(p => p.visible = false); }
+            const isRec = this.recorder && this.recorder.state === "recording";
+            if (isRec) { this.grid.visible = false; this.points.forEach(p => p.visible = false); }
             this.renderer.render(this.scene, this.camera);
-            if (isRecording) { this.points.forEach(p => p.visible = true); }
+            if (isRec) { this.points.forEach(p => p.visible = true); }
         }
 
         toggleRecord(btn) {
@@ -213,14 +230,14 @@
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `AR_Video_${Date.now()}.webm`; a.click();
+                    a.download = `AR_ColorPro_${Date.now()}.webm`; a.click();
                 };
                 this.recorder.start();
                 btn.classList.add('recording');
             } else { this.recorder.stop(); btn.classList.remove('recording'); }
         }
     }
-    new ARPerfectModule();
+    new ARColorPro();
 </script>
 </body>
 </html>
