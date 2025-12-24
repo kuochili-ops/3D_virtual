@@ -3,48 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Full View</title>
+    <title>FlipBoardAR - Pure AR Layer</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        #media-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; }
-        #bg-video, #bg-img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
         
-        /* 可收合的 UI 面板 */
-        #app-ui {
-            position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
-            background: rgba(0,0,0,0.7); backdrop-filter: blur(10px); 
-            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex; flex-direction: column; align-items: center; padding-bottom: env(safe-area-inset-bottom);
+        /* 關鍵：相機層在最底下 */
+        #media-layer {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 1; overflow: hidden; background: #000;
         }
-        #app-ui.collapsed { transform: translateY(calc(100% - 45px)); }
+        #bg-video, #bg-img { width: 100%; height: 100%; object-fit: cover; display: none; }
         
-        .tab-handle { width: 100%; height: 45px; display: flex; justify-content: center; align-items: center; cursor: pointer; color: #00ffff; font-weight: bold; font-size: 14px; background: rgba(0,0,0,0.3); }
-        .ui-content { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0 20px 0; }
-        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; color: #000; }
+        /* 關鍵：3D 畫布層在中間 */
+        #canvas-layer {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 10; pointer-events: auto;
+        }
+        
+        /* 關鍵：UI 面板在最上面 */
+        #app-ui {
+            position: fixed; bottom: 0; left: 0; width: 100%; z-index: 100;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
+            transition: transform 0.3s ease; padding-bottom: env(safe-area-inset-bottom);
+        }
+        #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
+        
+        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; font-size: 13px; background: rgba(0,0,0,0.5); cursor: pointer; }
+        .ui-content { padding: 10px 0 15px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 5px; }
+        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 45%; }
-        #rec-btn { width: 50px; height: 50px; border: 4px solid #fff; background: red; border-radius: 50%; }
+        #rec-btn { width: 45px; height: 45px; border: 3px solid #fff; background: red; border-radius: 50%; }
         input[type="file"] { display: none; }
     </style>
 </head>
 <body>
 
-<div id="media-container">
-    <video id="bg-video" autoplay playsinline muted loop></video>
+<div id="media-layer">
+    <video id="bg-video" autoplay playsinline muted loop webkit-playsinline></video>
     <img id="bg-img">
 </div>
 
-<input type="file" id="media-input" accept="image/*,video/*">
-<div id="canvas-container"></div>
+<div id="canvas-layer"></div>
 
 <div id="app-ui">
     <div class="tab-handle" id="toggleUI">🔼 點擊展開/縮小控制台</div>
     <div class="ui-content">
         <div class="ui-row">
             <input type="text" id="textInput" value="MERCEDES-BENZ">
-            <input type="color" id="colorPicker" value="#ffffff" style="width:30px; height:30px;">
-            <button class="btn" id="updateBtn">更新</button>
+            <input type="color" id="colorPicker" value="#ffffff" style="width:25px; height:25px;">
+            <button class="btn" id="updateBtn">更新文字</button>
         </div>
         <div class="ui-row">
             <span style="color:#00ffff; font-size:10px;">流速</span>
@@ -55,11 +63,13 @@
         <div class="ui-row">
             <button class="btn" id="viewToggle" style="background:#444; color:#fff;">🔄 視角切換</button>
             <button class="btn" id="openMedia" style="background:#fff;">📂 選擇媒體</button>
-            <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.4;">👁️</button>
+            <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.3;">👁️</button>
             <div id="rec-btn"></div>
         </div>
     </div>
 </div>
+
+<input type="file" id="media-input" accept="image/*,video/*">
 
 <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
@@ -70,9 +80,10 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARFullViewApp {
+    class ARUltimateApp {
         constructor() {
             this.scene = new THREE.Scene();
+            // 關鍵：alpha 必須為 true 且不設背景，才能看到底下的 video
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             this.currentView = "front";
@@ -82,8 +93,8 @@
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.setPixelRatio(window.devicePixelRatio);
-            this.renderer.setClearColor(0x000000, 0);
-            document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+            this.renderer.setClearColor(0x000000, 0); // 透明度設為 0
+            document.getElementById('canvas-layer').appendChild(this.renderer.domElement);
             
             this.camera.position.set(0, 50, 450);
 
@@ -93,7 +104,7 @@
 
             this.points = [
                 this.createPoint(new THREE.Vector3(180, 0, -150), 0x00ff00),
-                this.createPoint(new THREE.Vector3(0, 120, 100), 0xffff00),
+                this.createPoint(new THREE.Vector3(0, 120, 100), 0xffff00), // 黃球
                 this.createPoint(new THREE.Vector3(-180, 0, -150), 0xff0000)
             ];
 
@@ -102,12 +113,12 @@
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
-            // UI 收合邏輯
+            // UI 收合按鈕
             const ui = document.getElementById('app-ui');
             const handle = document.getElementById('toggleUI');
             handle.onclick = () => {
                 ui.classList.toggle('collapsed');
-                handle.innerText = ui.classList.contains('collapsed') ? "🔼 展開選單" : "🔽 隱藏選單";
+                handle.innerText = ui.classList.contains('collapsed') ? "🔼 展開面板" : "🔽 隱藏面板";
             };
 
             document.getElementById('openMedia').onclick = () => document.getElementById('media-input').click();
@@ -137,9 +148,9 @@
                 videoEl.style.display = 'none';
                 imgEl.style.display = 'block'; imgEl.src = url;
             }
-            // 選完照片後自動收起選單，方便微調
-            document.getElementById('app-ui').classList.add('collapsed');
-            document.getElementById('toggleUI').innerText = "🔼 展開選單";
+            // 自動隱藏輔助
+            this.toggleHelpers(false);
+            ui.classList.add('collapsed');
         }
 
         switchView() {
@@ -155,9 +166,9 @@
         }
 
         createPoint(pos, color) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(18), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+            const m = new THREE.Mesh(new THREE.SphereGeometry(20), new THREE.MeshBasicMaterial({ color, depthTest: false }));
             m.position.copy(pos);
-            m.renderOrder = 999;
+            m.renderOrder = 9999; // 極限置頂
             this.scene.add(m);
             return m;
         }
@@ -184,9 +195,10 @@
             
             const tex = new THREE.CanvasTexture(canvas);
             for (let j = 0; j < 15; j++) {
-                const m = new THREE.Mesh(new THREE.PlaneGeometry(45, 45), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
                 m.position.z = -j * 1.5;
                 m.material.opacity = (1 - j/15);
+                m.renderOrder = 500;
                 g.add(m);
             }
             return g;
@@ -225,16 +237,15 @@
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `FullView_AR.webm`; a.click();
+                    a.download = `Mercedes_Final.webm`; a.click();
                     this.toggleHelpers(true);
                 };
                 this.recorder.start();
-                btn.style.borderRadius = "10px"; btn.style.background = "#fff";
-                document.getElementById('app-ui').classList.add('collapsed');
-            } else { this.recorder.stop(); btn.style.borderRadius = "50%"; btn.style.background = "red"; }
+                btn.style.background = "#fff";
+            } else { this.recorder.stop(); btn.style.background = "red"; }
         }
     }
-    new ARFullViewApp();
+    new ARUltimateApp();
 </script>
 </body>
 </html>
