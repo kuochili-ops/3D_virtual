@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR Fix</title>
+    <title>FlipBoardAR Ultra Fix</title>
     <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+TC:wght@900&family=Zhi+Mang+Xing&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
@@ -50,12 +50,6 @@
             <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.3;">👁️</button>
             <div id="rec-btn"></div>
         </div>
-        <div class="ui-row">
-            <span>流速</span>
-            <input type="range" id="speedSlider" min="1" max="100" value="20" style="width: 35%;">
-            <span>字距</span>
-            <input type="range" id="gapSlider" min="1" max="50" value="10" style="width: 35%;">
-        </div>
     </div>
 </div>
 
@@ -67,30 +61,39 @@
     import * as THREE from 'three';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARFixApp {
+    class AREngine {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-            this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 2000);
+            this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
             
             this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-            this.renderer.toneMapping = THREE.NoToneMapping; // 防止畫面偏白
+            this.renderer.toneMapping = THREE.NoToneMapping; 
 
-            this.fontStyles = ['900 400px "Noto Serif TC"', '400 400px "Zhi Mang Xing"', '400 400px "Ma Shan Zheng"', '900 400px sans-serif'];
-            this.fontIdx = 0;
-            this.controlMode = 'path'; 
-            this.helperVisible = true;
             this.bgParams = { scale: 1, pos: new THREE.Vector2(0, 0), rotation: 0 };
-            this.bgTexture = null;
+            this.controlMode = 'path'; 
+            this.fontIdx = 0;
+            this.fontStyles = ['900 400px "Noto Serif TC"', '400 400px "Zhi Mang Xing"', '400 400px "Ma Shan Zheng"', '900 400px sans-serif'];
 
             this.init();
         }
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(window.devicePixelRatio);
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
             this.camera.position.z = 500;
 
+            // 1. 建立背景平面 (取代 scene.background 以解決拉伸問題)
+            const bgGeo = new THREE.PlaneGeometry(2, 2);
+            this.bgMat = new THREE.MeshBasicMaterial({ depthWrite: false });
+            this.bgMesh = new THREE.Mesh(bgGeo, this.bgMat);
+            this.bgMesh.frustumCulled = false;
+            this.bgScene = new THREE.Scene();
+            this.bgCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            this.bgScene.add(this.bgMesh);
+
+            // 2. 輔助元件
             this.grid = new THREE.GridHelper(800, 20, 0x00ffff, 0x222222);
             this.grid.position.y = -100;
             this.scene.add(this.grid);
@@ -103,73 +106,72 @@
 
             this.dragControls = new DragControls([...this.points], this.camera, this.renderer.domElement);
             
-            // 事件綁定
+            // UI 事件綁定
             document.getElementById('modePath').onclick = () => this.setMode('path');
             document.getElementById('modePhoto').onclick = () => this.setMode('photo');
             document.getElementById('camBtn').onclick = () => this.startCamera();
             document.getElementById('openAlbum').onclick = () => document.getElementById('media-input').click();
-            document.getElementById('media-input').onchange = (e) => this.loadPhoto(e.target.files[0]);
-            document.getElementById('toggleGuide').onclick = () => this.toggleHelpers();
+            document.getElementById('media-input').onchange = (e) => this.loadFile(e.target.files[0]);
             document.getElementById('fontToggle').onclick = () => { this.fontIdx = (this.fontIdx+1)%4; this.updateText(); };
+            document.getElementById('toggleGuide').onclick = () => this.toggleHelpers();
+            document.getElementById('textInput').oninput = () => this.updateText();
+            document.getElementById('colorPicker').oninput = () => this.updateText();
             document.getElementById('toggleUI').onclick = () => document.getElementById('app-ui').classList.toggle('collapsed');
-            
-            const refresh = () => this.updateText();
-            document.getElementById('textInput').oninput = refresh;
-            document.getElementById('colorPicker').oninput = refresh;
-            document.getElementById('gapSlider').oninput = (e) => { this.charGap = e.target.value/100; refresh(); };
-            
-            this.flowSpeed = 0.0008;
-            this.charGap = 0.1;
+
             this.setupGestures();
             this.updateText();
             this.animate();
         }
 
-        // 核心修正：計算 UV 矩陣防止直條拉伸
-        updateBackgroundMatrix() {
-            if (!this.bgTexture) return;
-            const tex = this.bgTexture;
+        // 核心修正函數：手動計算 UV 適配螢幕比例
+        updateBGMatrix() {
+            if (!this.bgMat.map) return;
+            const tex = this.bgMat.map;
             const image = tex.image;
             const imgAspect = (image.videoWidth || image.width) / (image.videoHeight || image.height);
             const screenAspect = window.innerWidth / window.innerHeight;
 
             tex.matrixAutoUpdate = false;
-            let repeatX = 1, repeatY = 1;
+            let ratioX = 1, ratioY = 1;
 
+            // Cover 邏輯：等比例縮放以填滿螢幕，防止直條拉伸
             if (imgAspect > screenAspect) {
-                repeatX = screenAspect / imgAspect;
+                ratioX = screenAspect / imgAspect;
             } else {
-                repeatY = imgAspect / screenAspect;
+                ratioY = imgAspect / screenAspect;
             }
 
             tex.matrix.setUvTransform(
                 0.5 + this.bgParams.pos.x, 0.5 + this.bgParams.pos.y, 
-                repeatX * this.bgParams.scale, repeatY * this.bgParams.scale, 
+                ratioX * this.bgParams.scale, ratioY * this.bgParams.scale, 
                 this.bgParams.rotation, 0.5, 0.5
             );
-            this.scene.background = tex;
         }
 
         async startCamera() {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            const video = document.getElementById('video-preview');
-            video.srcObject = stream;
-            video.onloadedmetadata = () => {
-                this.bgTexture = new THREE.VideoTexture(video);
-                this.bgTexture.colorSpace = THREE.SRGBColorSpace;
-                this.updateBackgroundMatrix();
-                this.toggleHelpers(false);
-            };
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } });
+                const video = document.getElementById('video-preview');
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    const tex = new THREE.VideoTexture(video);
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    this.bgMat.map = tex;
+                    this.updateBGMatrix();
+                    this.toggleHelpers(false);
+                };
+            } catch (e) { alert("相機開啟失敗"); }
         }
 
-        loadPhoto(file) {
+        loadFile(file) {
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
                 new THREE.TextureLoader().load(e.target.result, (tex) => {
                     tex.colorSpace = THREE.SRGBColorSpace;
-                    this.bgTexture = tex;
+                    this.bgMat.map = tex;
                     this.bgParams.scale = 1;
-                    this.updateBackgroundMatrix();
+                    this.updateBGMatrix();
                     this.toggleHelpers(false);
                 });
             };
@@ -179,18 +181,18 @@
         setupGestures() {
             let lastDist = 0;
             this.renderer.domElement.addEventListener('touchmove', (e) => {
-                if (this.controlMode !== 'photo' || !this.bgTexture) return;
+                if (this.controlMode !== 'photo' || !this.bgMat.map) return;
                 if (e.touches.length === 1) {
-                    this.bgParams.pos.x -= e.movementX * 0.0007;
-                    this.bgParams.pos.y += e.movementY * 0.0007;
+                    this.bgParams.pos.x -= e.movementX * 0.0008;
+                    this.bgParams.pos.y += e.movementY * 0.0008;
                 } else if (e.touches.length === 2) {
                     const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
                     if (lastDist > 0) this.bgParams.scale *= (lastDist / dist);
                     lastDist = dist;
                 }
-                this.updateBackgroundMatrix();
+                this.updateBGMatrix();
             }, { passive: false });
-            this.renderer.domElement.addEventListener('touchend', () => { lastDist = 0; });
+            this.renderer.domElement.addEventListener('touchend', () => lastDist = 0);
         }
 
         setMode(m) {
@@ -238,7 +240,7 @@
                     m.material.opacity = (1 - j/15);
                     g.add(m);
                 }
-                g.userData.tOffset = -i * this.charGap;
+                g.userData.tOffset = -i * 0.12;
                 this.scene.add(g);
                 this.charGroups.push(g);
             });
@@ -246,8 +248,14 @@
 
         animate() {
             requestAnimationFrame(() => this.animate());
+            
+            // 渲染背景平面
+            this.renderer.autoClear = false;
+            this.renderer.clear();
+            this.renderer.render(this.bgScene, this.bgCamera);
+            
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
-            const time = Date.now() * this.flowSpeed;
+            const time = Date.now() * 0.0008;
             this.charGroups?.forEach(g => {
                 let t = (time + g.userData.tOffset) % 2.5 - 0.5;
                 if (t >= 0 && t <= 1) {
@@ -261,7 +269,7 @@
             this.renderer.render(this.scene, this.camera);
         }
     }
-    window.onload = () => new ARFixApp();
+    window.onload = () => new AREngine();
 </script>
 </body>
 </html>
