@@ -3,32 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR Font Fixed</title>
-    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+TC:wght@900&family=Zhi+Mang+Xing&display=swap" rel="stylesheet">
+    <title>FlipBoardAR Final Module</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Long+Cang&family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
-        #media-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; z-index: 1; }
+        
+        /* 影像層：確保背景比例正確且不偏暗 */
+        #media-layer {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex; justify-content: center; align-items: center; overflow: hidden; z-index: 1;
+        }
         #bg-image, #bg-video { flex-shrink: 0; object-fit: contain; transform-origin: center; }
+
+        /* 3D 渲染層 */
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: auto; }
-        #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); transition: transform 0.3s; }
+
+        /* UI 面板 */
+        #app-ui { 
+            position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; 
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); 
+            transition: transform 0.3s; border-top: 1px solid #333;
+        }
         #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
-        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; cursor: pointer; font-weight: bold; border-bottom: 1px solid #333; }
+        
+        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; cursor: pointer; font-weight: bold; }
         .ui-content { padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        
         .slider-group { flex: 1; display: flex; flex-direction: column; }
         .slider-label { color: #00ffff; font-size: 10px; margin-bottom: 4px; display: flex; justify-content: space-between; }
         input[type="range"] { width: 100%; accent-color: #00ffff; }
-        .btn { flex: 1; background: #00ffff; border: none; padding: 10px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; }
+        
+        .btn { flex: 1; background: #00ffff; border: none; padding: 10px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; color: #000; }
         .mode-btn { background: #444; color: #ccc; }
         .active-mode { background: #ffaa00 !important; color: #000 !important; }
-        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 40%; }
+        
+        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 45%; }
+        input[type="color"] { width: 40px; height: 35px; border: none; background: none; }
+        
         #rec-btn { width: 40px; height: 40px; border: 2px solid #fff; background: red; border-radius: 50%; }
-        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; z-index: 1000; color: #00ffff; justify-content: center; align-items: center; font-weight: bold; }
+        #loading-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.8); display: none; z-index: 1000; 
+            color: #00ffff; justify-content: center; align-items: center; font-weight: bold; 
+        }
+        .hint { color: #ffaa00; font-size: 10px; position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; z-index: 50; text-shadow: 1px 1px 2px #000; }
     </style>
 </head>
 <body>
 
-<div id="loading-overlay">字型加載中...</div>
+<div id="loading-overlay">字型載入中...</div>
+<div class="hint" id="ui-hint">📍 調整路徑模式</div>
 
 <div id="media-layer">
     <video id="bg-video" autoplay playsinline muted style="display:none;"></video>
@@ -37,13 +62,14 @@
 <div id="canvas-container"></div>
 
 <div id="app-ui">
-    <div class="tab-handle" id="toggleUI">🔼 收合選單</div>
+    <div class="tab-handle" id="toggleUI">🔼 收合選單 (錄影用)</div>
     <div class="ui-content">
         <div class="ui-row">
-            <input type="text" id="textInput" value="MERCEDES">
+            <input type="text" id="textInput" value="啟動成功">
             <input type="color" id="colorPicker" value="#ffffff">
-            <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff; flex: 0.5;">更換字型</button>
+            <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff; flex: 0.6;">更換字型</button>
         </div>
+
         <div class="ui-row">
             <div class="slider-group">
                 <div class="slider-label"><span>飛行速度</span><span id="speedVal">1.0</span></div>
@@ -54,10 +80,12 @@
                 <input type="range" id="spacingSlider" min="0.05" max="0.5" step="0.01" value="0.12">
             </div>
         </div>
+
         <div class="ui-row">
             <button class="btn mode-btn active-mode" id="modePath">📍 3D 路徑</button>
             <button class="btn mode-btn" id="modePhoto">🖼️ 背景調整</button>
         </div>
+
         <div class="ui-row">
             <button class="btn" id="camBtn">📷 鏡頭</button>
             <button class="btn" id="openAlbum" style="background:#fff;">📂 照片</button>
@@ -81,21 +109,17 @@
     import { DragControls } from 'three/addons/controls/DragControls.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    class ARFullModule {
+    class ARMasterApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
             
             this.params = {
-                speed: 1.0,
-                spacing: 0.12,
-                mode: 'path',
-                helpers: true,
-                fontIdx: 0,
-                // 精確指定字型名稱，確保 CSS 匹配
-                fontFamilies: ['"Noto Serif TC"', '"Zhi Mang Xing"', '"Ma Shan Zheng"', 'sans-serif'],
-                fontStyles: ['900 400px "Noto Serif TC"', '400 400px "Zhi Mang Xing"', '400 400px "Ma Shan Zheng"', '900 400px sans-serif']
+                speed: 1.0, spacing: 0.12, mode: 'path', helpers: true, fontIdx: 0,
+                // 使用字庫最完整的 Noto Serif TC (思源宋體) 作為首選
+                fontFamilies: ['"Noto Serif TC"', '"Long Cang"', '"ZCOOL QingKe HuangYou"', '"Noto Sans TC"'],
+                fontStyles: ['900 400px "Noto Serif TC"', '400 400px "Long Cang"', '400 400px "ZCOOL QingKe HuangYou"', '900 400px "Noto Sans TC"']
             };
 
             this.bgParams = { scale: 1, x: 0, y: 0 };
@@ -122,51 +146,12 @@
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
-            this._setupUIEvents();
-            this.updateText(); // 初始調用
+            this._bindEvents();
+            this.updateText();
             this._animate();
         }
 
-        async updateText() {
-            const currentFontName = this.params.fontFamilies[this.params.fontIdx];
-            const currentFontStyle = this.params.fontStyles[this.params.fontIdx];
-            const text = document.getElementById('textInput').value || "";
-
-            // 關鍵：等待特定的字型載入完成，而不是僅僅等待 document.fonts.ready
-            const overlay = document.getElementById('loading-overlay');
-            if (!document.fonts.check(currentFontStyle)) {
-                overlay.style.display = 'flex';
-                await document.fonts.load(currentFontStyle);
-                overlay.style.display = 'none';
-            }
-
-            if (this.charGroups) this.charGroups.forEach(g => this.scene.remove(g));
-            this.charGroups = [];
-            
-            text.split('').forEach((c, i) => {
-                const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
-                const ctx = canvas.getContext('2d');
-                ctx.font = currentFontStyle;
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.strokeStyle = '#000'; ctx.lineWidth = 20;
-                ctx.strokeText(c, 256, 256);
-                ctx.fillStyle = document.getElementById('colorPicker').value;
-                ctx.fillText(c, 256, 256);
-                
-                const tex = new THREE.CanvasTexture(canvas);
-                const g = new THREE.Group();
-                for (let j = 0; j < 20; j++) {
-                    const m = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.05, side: THREE.DoubleSide }));
-                    m.position.z = -j * 2; m.material.opacity = (1 - j/20);
-                    g.add(m);
-                }
-                this.scene.add(g);
-                this.charGroups.push(g);
-            });
-        }
-
-        // ... (其餘 UI, 縮放, 動畫邏輯保持不變)
-        _setupUIEvents() {
+        _bindEvents() {
             const get = (id) => document.getElementById(id);
             get('speedSlider').oninput = (e) => { this.params.speed = parseFloat(e.target.value); get('speedVal').innerText = e.target.value; };
             get('spacingSlider').oninput = (e) => { this.params.spacing = parseFloat(e.target.value); get('spacingVal').innerText = e.target.value; };
@@ -183,7 +168,45 @@
                 this.params.helpers = !this.params.helpers;
                 this.grid.visible = this.params.helpers;
                 this.points.forEach(p => p.visible = this.params.helpers);
+                get('toggleGuide').innerText = this.params.helpers ? "👁️" : "🙈";
             };
+            this._setupBGTouch();
+        }
+
+        async updateText() {
+            const style = this.params.fontStyles[this.params.fontIdx];
+            const overlay = document.getElementById('loading-overlay');
+            
+            if (!document.fonts.check(style)) {
+                overlay.style.display = 'flex';
+                await document.fonts.load(style);
+                overlay.style.display = 'none';
+            }
+
+            if (this.charGroups) this.charGroups.forEach(g => this.scene.remove(g));
+            this.charGroups = [];
+            
+            const text = document.getElementById('textInput').value || "";
+            text.split('').forEach((c, i) => {
+                const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                ctx.font = style;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.strokeStyle = '#000'; ctx.lineWidth = 15;
+                ctx.strokeText(c, 256, 256);
+                ctx.fillStyle = document.getElementById('colorPicker').value;
+                ctx.fillText(c, 256, 256);
+                
+                const tex = new THREE.CanvasTexture(canvas);
+                const g = new THREE.Group();
+                for (let j = 0; j < 20; j++) {
+                    const m = new THREE.Mesh(new THREE.PlaneGeometry(85, 85), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1, side: THREE.DoubleSide }));
+                    m.position.z = -j * 1.8; m.material.opacity = (1 - j/22);
+                    g.add(m);
+                }
+                this.scene.add(g);
+                this.charGroups.push(g);
+            });
         }
 
         setMode(m) {
@@ -192,22 +215,43 @@
             this.orbit.enabled = (m === 'path');
             document.getElementById('modePath').classList.toggle('active-mode', m === 'path');
             document.getElementById('modePhoto').classList.toggle('active-mode', m === 'photo');
+            document.getElementById('ui-hint').innerText = (m === 'path') ? "📍 調整路徑模式" : "🖼️ 背景調整模式";
         }
 
         async startCamera() {
             const v = document.getElementById('bg-video'); const i = document.getElementById('bg-image');
             i.style.display = 'none'; v.style.display = 'block';
             const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            v.srcObject = s; this.activeEl = v; this.updateBG();
+            v.srcObject = s; this.activeEl = v;
         }
 
         loadPhoto(file) {
             const i = document.getElementById('bg-image'); const v = document.getElementById('bg-video');
             v.style.display = 'none'; i.style.display = 'block';
-            i.src = URL.createObjectURL(file); this.activeEl = i; this.updateBG();
+            i.src = URL.createObjectURL(file); this.activeEl = i;
         }
 
         updateBG() { if (this.activeEl) this.activeEl.style.transform = `translate(${this.bgParams.x}px, ${this.bgParams.y}px) scale(${this.bgParams.scale})`; }
+
+        _setupBGTouch() {
+            let lx, ly, ld;
+            this.renderer.domElement.addEventListener('touchstart', (e) => {
+                if (this.params.mode !== 'photo') return;
+                lx = e.touches[0].clientX; ly = e.touches[0].clientY;
+                if (e.touches.length === 2) ld = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+            });
+            this.renderer.domElement.addEventListener('touchmove', (e) => {
+                if (this.params.mode !== 'photo') return;
+                if (e.touches.length === 1) {
+                    this.bgParams.x += e.touches[0].clientX - lx; this.bgParams.y += e.touches[0].clientY - ly;
+                    lx = e.touches[0].clientX; ly = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                    this.bgParams.scale *= (d / ld); ld = d;
+                }
+                this.updateBG();
+            });
+        }
 
         _createPoint(pos, color) {
             const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
@@ -232,7 +276,7 @@
             this.renderer.render(this.scene, this.camera);
         }
     }
-    window.onload = () => new ARFullModule();
+    window.onload = () => new ARMasterApp();
 </script>
 </body>
 </html>
