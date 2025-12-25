@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR 3D Full Access</title>
+    <title>FlipBoardAR Ready to Record</title>
     <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+TC:wght@900&family=Zhi+Mang+Xing&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
@@ -25,7 +25,7 @@
 </head>
 <body>
 
-<div class="hint" id="ui-hint">📍 單指移球 / ✌️ 雙指轉動空間</div>
+<div class="hint" id="ui-hint">📍 調整路徑模式</div>
 
 <div id="media-layer">
     <video id="bg-video" autoplay playsinline muted style="display:none;"></video>
@@ -34,7 +34,7 @@
 <div id="canvas-container"></div>
 
 <div id="app-ui">
-    <div class="tab-handle" id="toggleUI">🔽 點此收合選單</div>
+    <div class="tab-handle" id="toggleUI">🔼 收合選單 (錄影用)</div>
     <div class="ui-content">
         <div class="ui-row">
             <input type="text" id="textInput" value="MERCEDES">
@@ -42,13 +42,13 @@
             <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff;">更換字型</button>
         </div>
         <div class="ui-row">
-            <button class="btn mode-btn active-mode" id="modePath">📍 3D 路徑模式</button>
-            <button class="btn mode-btn" id="modePhoto">🖼️ 背景調整模式</button>
+            <button class="btn mode-btn active-mode" id="modePath">📍 3D 路徑</button>
+            <button class="btn mode-btn" id="modePhoto">🖼️ 背景調整</button>
         </div>
         <div class="ui-row">
             <button class="btn" id="camBtn">📷 鏡頭</button>
             <button class="btn" id="openAlbum" style="background:#fff;">📂 照片</button>
-            <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.3;">👁️</button>
+            <button class="btn" id="toggleGuide" style="background:#444; color:#fff; flex:0.3;">👁️</button>
             <div id="rec-btn"></div>
         </div>
     </div>
@@ -68,7 +68,7 @@
     import { DragControls } from 'three/addons/controls/DragControls.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    class ARMasterModule {
+    class ARRecordingModule {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -76,6 +76,7 @@
             
             this.bgParams = { scale: 1, x: 0, y: 0 };
             this.controlMode = 'path'; 
+            this.helperVisible = true; // 輔助工具顯示狀態
             this.fontIdx = 0;
             this.fontStyles = ['900 400px "Noto Serif TC"', '400 400px "Zhi Mang Xing"', '400 400px "Ma Shan Zheng"', '900 400px sans-serif'];
 
@@ -88,28 +89,23 @@
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
             this.camera.position.set(0, 200, 1000);
 
-            // 1. 空間控制器 (用於旋轉視角)
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
             this.orbit.enableDamping = true;
-            this.orbit.enabled = true;
 
-            // 2. 輔助網格 (增加深度感)
             this.grid = new THREE.GridHelper(2000, 25, 0x00ffff, 0x333333);
             this.scene.add(this.grid);
 
-            // 3. 強化三球 (增加碰撞範圍)
             this.points = [
                 this.createPoint(new THREE.Vector3(300, 50, 0), 0x00ff00),   
                 this.createPoint(new THREE.Vector3(0, 300, 200), 0xffff00), 
                 this.createPoint(new THREE.Vector3(-300, 50, 0), 0xff0000)   
             ];
 
-            // 4. 拖拽控制器
             this.drag = new DragControls([...this.points], this.camera, this.renderer.domElement);
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
-            // UI 綁定
+            // UI 事件
             document.getElementById('modePath').onclick = () => this.setMode('path');
             document.getElementById('modePhoto').onclick = () => this.setMode('photo');
             document.getElementById('camBtn').onclick = () => this.startCamera();
@@ -119,10 +115,21 @@
             document.getElementById('toggleUI').onclick = () => document.getElementById('app-ui').classList.toggle('collapsed');
             document.getElementById('textInput').oninput = () => this.updateText();
             document.getElementById('colorPicker').oninput = () => this.updateText();
+            
+            // 👁️ 隱藏功能綁定
+            document.getElementById('toggleGuide').onclick = () => this.toggleHelpers();
 
             this.setupBGTouch();
             this.updateText();
             this.animate();
+        }
+
+        toggleHelpers() {
+            this.helperVisible = !this.helperVisible;
+            this.grid.visible = this.helperVisible;
+            this.points.forEach(p => p.visible = this.helperVisible);
+            document.getElementById('toggleGuide').style.background = this.helperVisible ? "#444" : "#00ffff";
+            document.getElementById('toggleGuide').innerText = this.helperVisible ? "👁️" : "🙈";
         }
 
         setMode(m) {
@@ -130,35 +137,28 @@
             const isPath = (m === 'path');
             document.getElementById('modePath').classList.toggle('active-mode', isPath);
             document.getElementById('modePhoto').classList.toggle('active-mode', !isPath);
-            document.getElementById('ui-hint').innerText = isPath ? "📍 單指移球 / ✌️ 雙指轉動空間" : "🖼️ 單指移動背景 / ✌️ 雙指縮放背景";
+            document.getElementById('ui-hint').innerText = isPath ? "📍 調整路徑模式" : "🖼️ 背景調整模式";
             this.drag.enabled = isPath;
             this.orbit.enabled = isPath;
         }
 
+        // ... (背景縮放與相機控制邏輯不變)
         async startCamera() {
             const v = document.getElementById('bg-video');
             const i = document.getElementById('bg-image');
             i.style.display = 'none'; v.style.display = 'block';
             const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            v.srcObject = s;
-            this.activeEl = v;
-            this.bgParams = { scale: 1, x: 0, y: 0 };
-            this.updateBG();
+            v.srcObject = s; this.activeEl = v; this.bgParams = { scale: 1, x: 0, y: 0 }; this.updateBG();
         }
 
         loadPhoto(file) {
             const i = document.getElementById('bg-image');
             const v = document.getElementById('bg-video');
             v.style.display = 'none'; i.style.display = 'block';
-            i.src = URL.createObjectURL(file);
-            this.activeEl = i;
-            this.bgParams = { scale: 1, x: 0, y: 0 };
-            this.updateBG();
+            i.src = URL.createObjectURL(file); this.activeEl = i; this.bgParams = { scale: 1, x: 0, y: 0 }; this.updateBG();
         }
 
-        updateBG() {
-            if (this.activeEl) this.activeEl.style.transform = `translate(${this.bgParams.x}px, ${this.bgParams.y}px) scale(${this.bgParams.scale})`;
-        }
+        updateBG() { if (this.activeEl) this.activeEl.style.transform = `translate(${this.bgParams.x}px, ${this.bgParams.y}px) scale(${this.bgParams.scale})`; }
 
         setupBGTouch() {
             let lx, ly, ld;
@@ -170,20 +170,18 @@
             this.renderer.domElement.addEventListener('touchmove', (e) => {
                 if (this.controlMode !== 'photo') return;
                 if (e.touches.length === 1) {
-                    this.bgParams.x += e.touches[0].clientX - lx;
-                    this.bgParams.y += e.touches[0].clientY - ly;
+                    this.bgParams.x += e.touches[0].clientX - lx; this.bgParams.y += e.touches[0].clientY - ly;
                     lx = e.touches[0].clientX; ly = e.touches[0].clientY;
                 } else if (e.touches.length === 2) {
                     const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                    this.bgParams.scale *= (d / ld);
-                    ld = d;
+                    this.bgParams.scale *= (d / ld); ld = d;
                 }
                 this.updateBG();
             });
         }
 
         createPoint(pos, color) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
+            const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
             m.position.copy(pos);
             this.scene.add(m);
             return m;
@@ -203,18 +201,14 @@
                 ctx.strokeText(c, 256, 256);
                 ctx.fillStyle = document.getElementById('colorPicker').value;
                 ctx.fillText(c, 256, 256);
-                
                 const tex = new THREE.CanvasTexture(canvas);
                 const g = new THREE.Group();
                 for (let j = 0; j < 20; j++) {
                     const m = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.05, side: THREE.DoubleSide }));
-                    m.position.z = -j * 2;
-                    m.material.opacity = (1 - j/20);
+                    m.position.z = -j * 2; m.material.opacity = (1 - j/20);
                     g.add(m);
                 }
-                g.userData.tOffset = -i * 0.12;
-                this.scene.add(g);
-                this.charGroups.push(g);
+                g.userData.tOffset = -i * 0.12; this.scene.add(g); this.charGroups.push(g);
             });
         }
 
@@ -236,7 +230,7 @@
             this.renderer.render(this.scene, this.camera);
         }
     }
-    window.onload = () => new ARMasterModule();
+    window.onload = () => new ARRecordingModule();
 </script>
 </body>
 </html>
