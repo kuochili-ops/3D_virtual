@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Pro Media</title>
+    <title>FlipBoardAR - Dual Control</title>
     <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+TC:wght@900&family=Zhi+Mang+Xing&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
-        #video-preview { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
         #app-ui {
             position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(15px);
@@ -19,38 +18,34 @@
         .ui-content { padding: 10px 0 15px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 5px; }
         .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; color: #000; }
-        .font-btn { background: #ffaa00; }
-        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 40%; font-size: 14px; }
+        .mode-btn { background: #ffaa00; } /* 橙色為模式切換 */
+        input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 40%; }
         #rec-btn { width: 45px; height: 45px; border: 3px solid #fff; background: red; border-radius: 50%; }
         input[type="file"] { display: none; }
-        span { color: #00ffff; font-size: 10px; }
+        .active-mode { outline: 3px solid #fff; box-shadow: 0 0 15px #ffaa00; }
     </style>
 </head>
 <body>
 
-<video id="video-preview" autoplay playsinline muted></video>
 <input type="file" id="media-input" accept="image/*">
 <div id="canvas-container"></div>
 
 <div id="app-ui">
-    <div class="tab-handle" id="toggleUI">🔼 展開面板</div>
+    <div class="tab-handle" id="toggleUI">🔼 點擊展開/縮小控制台</div>
     <div class="ui-content">
         <div class="ui-row">
-            <input type="text" id="textInput" value="賓士 MERCEDES">
-            <input type="color" id="colorPicker" value="#ffffff" style="width:30px; height:30px; border:none; background:none;">
-            <button class="btn font-btn" id="fontToggle">🔠 切換字型風格</button>
+            <input type="text" id="textInput" value="MERCEDES">
+            <input type="color" id="colorPicker" value="#ffffff">
+            <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff;">🔠 切換字型</button>
         </div>
         <div class="ui-row">
-            <button class="btn" id="camBtn" style="background:#ff00ff; color:#fff;">📷 切換鏡頭</button>
-            <button class="btn" id="openAlbum" style="background:#fff;">📂 選擇照片</button>
-            <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.3;">👁️</button>
+            <button class="btn mode-btn active-mode" id="modePath">📍 調整路徑模式</button>
+            <button class="btn mode-btn" id="modePhoto">🖼️ 調整照片模式</button>
+        </div>
+        <div class="ui-row">
+            <button class="btn" id="openAlbum" style="background:#fff;">📂 讀取照片</button>
+            <button class="btn" id="camBtn" style="background:#666; color:#fff;">📷 相機</button>
             <div id="rec-btn"></div>
-        </div>
-        <div class="ui-row">
-            <span>流速</span>
-            <input type="range" id="speedSlider" min="1" max="100" value="20" style="width: 35%;">
-            <span>密合度(字距)</span>
-            <input type="range" id="gapSlider" min="1" max="50" value="12" style="width: 35%;">
         </div>
     </div>
 </div>
@@ -61,141 +56,141 @@
 
 <script type="module">
     import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARProMediaApp {
+    class ARDualControlApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
-            
-            // 修正畫面偏白問題
-            this.renderer.toneMapping = THREE.NoToneMapping; 
             this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+            
+            this.fontStyles = ['900 400px "Noto Serif TC"', '400 400px "Zhi Mang Xing"', '400 400px "Ma Shan Zheng"', '900 400px sans-serif'];
+            this.fontIdx = 0;
+            this.controlMode = 'path'; // path 或 photo
+            
+            // 照片調整參數
+            this.photoScale = 1;
+            this.photoPos = new THREE.Vector2(0, 0);
+            this.photoRotation = 0;
+            this.bgTexture = null;
 
-            this.fontStyles = [
-                '900 400px "Noto Serif TC"',      // 高層次宋體
-                '400 400px "Zhi Mang Xing"',     // 正宗隸書/手寫風格
-                '400 400px "Ma Shan Zheng"',     // 霸氣草書
-                '900 400px sans-serif'           // 現代黑體
-            ];
-            this.fontNames = ["奢華宋體", "手寫隸書", "霸氣草書", "科技黑體"];
-            this.currentFontIdx = 0;
-            this.charGap = 0.12;
             this.init();
         }
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
-            this.camera.position.set(0, 50, 450);
-
-            this.grid = new THREE.GridHelper(600, 20, 0x00ffff, 0x333333);
-            this.grid.position.y = -80;
-            this.scene.add(this.grid);
+            this.camera.position.set(0, 0, 500);
 
             this.points = [
-                this.createPoint(new THREE.Vector3(200, 0, -150), 0x00ff00),
-                this.createPoint(new THREE.Vector3(0, 150, 100), 0xffff00),
-                this.createPoint(new THREE.Vector3(-200, 0, -150), 0xff0000)
+                this.createPoint(new THREE.Vector3(150, 50, 0), 0x00ff00),
+                this.createPoint(new THREE.Vector3(0, 150, 50), 0xffff00),
+                this.createPoint(new THREE.Vector3(-150, -50, 0), 0xff0000)
             ];
 
-            this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
-            this.drag = new DragControls([...this.points], this.camera, this.renderer.domElement);
-            this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
-            this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
-
-            document.getElementById('fontToggle').onclick = () => {
-                this.currentFontIdx = (this.currentFontIdx + 1) % this.fontStyles.length;
-                document.getElementById('fontToggle').innerText = `🔠 ${this.fontNames[this.currentFontIdx]}`;
-                this.updateText();
-            };
-
-            const refresh = () => this.updateText();
-            document.getElementById('colorPicker').oninput = refresh;
-            document.getElementById('textInput').oninput = refresh;
-            document.getElementById('gapSlider').oninput = (e) => { this.charGap = e.target.value / 100; refresh(); };
-            document.getElementById('speedSlider').oninput = (e) => this.flowSpeed = e.target.value * 0.00004;
-            document.getElementById('camBtn').onclick = () => this.toggleCamera();
+            this.dragControls = new DragControls([...this.points], this.camera, this.renderer.domElement);
+            
+            // UI 綁定
+            document.getElementById('modePath').onclick = () => this.setMode('path');
+            document.getElementById('modePhoto').onclick = () => this.setMode('photo');
+            document.getElementById('fontToggle').onclick = () => { this.fontIdx = (this.fontIdx + 1) % this.fontStyles.length; this.updateText(); };
             document.getElementById('openAlbum').onclick = () => document.getElementById('media-input').click();
-            document.getElementById('media-input').onchange = (e) => this.handleAlbum(e.target.files[0]);
+            document.getElementById('media-input').onchange = (e) => this.loadPhoto(e.target.files[0]);
+            document.getElementById('textInput').oninput = () => this.updateText();
+            document.getElementById('colorPicker').oninput = () => this.updateText();
             document.getElementById('toggleUI').onclick = () => document.getElementById('app-ui').classList.toggle('collapsed');
-            document.getElementById('toggleGuide').onclick = () => this.toggleHelpers();
-            document.getElementById('rec-btn').onclick = (e) => this.toggleRecord(e.target);
 
-            this.flowSpeed = 0.0008;
+            // 觸控手勢處理（針對照片模式）
+            this.setupGestures();
+            
             this.updateText();
             this.animate();
         }
 
-        // 核心：修正比例，防止拉伸
-        fitBackground(texture) {
-            const aspect = texture.image.width / texture.image.height;
-            const screenAspect = window.innerWidth / window.innerHeight;
-            
-            texture.matrixAutoUpdate = false;
-            if (aspect > screenAspect) {
-                // 橫式照片
-                texture.matrix.setUvTransform(0, 0, screenAspect / aspect, 1, 0, 0.5, 0.5);
-            } else {
-                // 直式照片
-                texture.matrix.setUvTransform(0, 0, 1, aspect / screenAspect, 0, 0.5, 0.5);
-            }
-            this.scene.background = texture;
-            this.scene.backgroundIntensity = 0.8; // 稍微降低背景強度，防止過曝
+        setMode(m) {
+            this.controlMode = m;
+            document.getElementById('modePath').classList.toggle('active-mode', m === 'path');
+            document.getElementById('modePhoto').classList.toggle('active-mode', m === 'photo');
+            this.dragControls.enabled = (m === 'path');
+            this.points.forEach(p => p.visible = (m === 'path'));
         }
 
-        async toggleCamera() {
-            if (this.stream) {
-                this.facing = (this.facing === "environment") ? "user" : "environment";
-                this.stream.getTracks().forEach(t => t.stop());
-            } else { this.facing = "environment"; }
-            
-            try {
-                this.stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: this.facing, width: {ideal: 1920}, height: {ideal: 1080} }, audio: false
-                });
-                const video = document.getElementById('video-preview');
-                video.srcObject = this.stream;
-                video.onloadedmetadata = () => {
-                    const tex = new THREE.VideoTexture(video);
-                    tex.colorSpace = THREE.SRGBColorSpace;
-                    this.scene.background = tex; // 相機通常需要全螢幕鋪滿
-                    this.toggleHelpers(false);
-                };
-            } catch (err) { alert("相機啟動失敗"); }
-        }
-
-        handleAlbum(file) {
+        loadPhoto(file) {
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
                 new THREE.TextureLoader().load(e.target.result, (tex) => {
                     tex.colorSpace = THREE.SRGBColorSpace;
-                    this.fitBackground(tex); // 呼叫比例修正函數
-                    this.toggleHelpers(false);
+                    this.bgTexture = tex;
+                    this.updateBackground();
                 });
             };
             reader.readAsDataURL(file);
         }
 
+        updateBackground() {
+            if (!this.bgTexture) return;
+            const tex = this.bgTexture;
+            const aspect = tex.image.width / tex.image.height;
+            const screenAspect = window.innerWidth / window.innerHeight;
+
+            tex.matrixAutoUpdate = false;
+            // 初始以寬度適配
+            let scaleX = 1, scaleY = 1;
+            if (aspect > screenAspect) {
+                scaleX = screenAspect / aspect;
+            } else {
+                scaleY = aspect / screenAspect;
+            }
+
+            // 套用使用者手勢調整
+            tex.matrix.setUvTransform(
+                0.5 + this.photoPos.x, 0.5 + this.photoPos.y, 
+                scaleX * this.photoScale, scaleY * this.photoScale, 
+                this.photoRotation, 0.5, 0.5
+            );
+            this.scene.background = tex;
+        }
+
+        setupGestures() {
+            let startDist = 0;
+            let startScale = 1;
+            this.renderer.domElement.addEventListener('touchmove', (e) => {
+                if (this.controlMode !== 'photo') return;
+                if (e.touches.length === 1) {
+                    // 單指移動照片
+                    this.photoPos.x -= e.movementX * 0.001;
+                    this.photoPos.y += e.movementY * 0.001;
+                } else if (e.touches.length === 2) {
+                    // 兩指縮放
+                    const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                    if (startDist === 0) startDist = dist;
+                    else {
+                        this.photoScale = startScale * (dist / startDist);
+                    }
+                }
+                this.updateBackground();
+            });
+            this.renderer.domElement.addEventListener('touchend', () => { startDist = 0; startScale = this.photoScale; });
+        }
+
         createPoint(pos, color) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(20), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+            const m = new THREE.Mesh(new THREE.SphereGeometry(15), new THREE.MeshBasicMaterial({ color, depthTest: false }));
             m.position.copy(pos);
-            m.renderOrder = 9999;
+            m.renderOrder = 999;
             this.scene.add(m);
             return m;
         }
 
-        updateText() {
+        async updateText() {
+            await document.fonts.ready; // 關鍵：確保字體載入
             if (this.charGroups) this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
             const text = document.getElementById('textInput').value || "";
             text.split('').forEach((c, i) => {
                 const g = this.createCharGroup(c);
-                g.userData.tOffset = -i * this.charGap;
+                g.userData.tOffset = -i * 0.15;
                 this.scene.add(g);
                 this.charGroups.push(g);
             });
@@ -205,38 +200,28 @@
             const g = new THREE.Group();
             const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-            
-            // 確保字型在繪製前已經載入（或使用預設替代）
-            ctx.font = this.fontStyles[this.currentFontIdx];
+            ctx.font = this.fontStyles[this.fontIdx];
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 25;
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 25;
             ctx.strokeText(char, 256, 256);
             ctx.fillStyle = document.getElementById('colorPicker').value;
             ctx.fillText(char, 256, 256);
-            
             const tex = new THREE.CanvasTexture(canvas);
-            const layers = 18;
-            for (let j = 0; j < layers; j++) {
-                const m = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.05 }));
+            for (let j = 0; j < 15; j++) {
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(45, 45), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
                 m.position.z = -j * 1.5;
-                m.material.opacity = (1 - j/layers);
+                m.material.opacity = (1 - j/15);
                 g.add(m);
             }
             return g;
         }
 
-        toggleHelpers(f) {
-            const s = f !== undefined ? f : !this.points[0].visible;
-            this.points.forEach(p => p.visible = s);
-            this.grid.visible = s;
-        }
-
         animate() {
             requestAnimationFrame(() => this.animate());
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
-            const time = Date.now() * this.flowSpeed;
-            this.charGroups.forEach(g => {
-                let t = (time + g.userData.tOffset) % 2.8 - 0.9; 
+            const time = Date.now() * 0.0008;
+            this.charGroups?.forEach(g => {
+                let t = (time + g.userData.tOffset) % 2.5 - 0.5;
                 if (t >= 0 && t <= 1) {
                     const pos = curve.getPointAt(t);
                     g.position.copy(pos);
@@ -247,26 +232,8 @@
             });
             this.renderer.render(this.scene, this.camera);
         }
-
-        toggleRecord(btn) {
-            if (!this.recorder || this.recorder.state === "inactive") {
-                this.chunks = [];
-                this.toggleHelpers(false);
-                this.recorder = new MediaRecorder(this.renderer.domElement.captureStream(30), { mimeType: 'video/webm' });
-                this.recorder.ondataavailable = e => this.chunks.push(e.data);
-                this.recorder.onstop = () => {
-                    const blob = new Blob(this.chunks, { type: 'video/webm' });
-                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `FlipBoard_Final.webm`; a.click();
-                    this.toggleHelpers(true);
-                };
-                this.recorder.start();
-                btn.style.background = "#fff";
-            } else { this.recorder.stop(); btn.style.background = "red"; }
-        }
     }
-    // 等待 500ms 確保雲端字體完成載入後再初始化 App
-    window.onload = () => setTimeout(() => new ARProMediaApp(), 500);
+    window.onload = () => new ARDualControlApp();
 </script>
 </body>
 </html>
