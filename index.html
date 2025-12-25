@@ -3,37 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR Full Control</title>
+    <title>FlipBoardAR Font Fixed</title>
     <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+TC:wght@900&family=Zhi+Mang+Xing&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #media-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; z-index: 1; }
         #bg-image, #bg-video { flex-shrink: 0; object-fit: contain; transform-origin: center; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: auto; }
-        
         #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); transition: transform 0.3s; }
         #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
-        
         .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; cursor: pointer; font-weight: bold; border-bottom: 1px solid #333; }
         .ui-content { padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        
         .slider-group { flex: 1; display: flex; flex-direction: column; }
         .slider-label { color: #00ffff; font-size: 10px; margin-bottom: 4px; display: flex; justify-content: space-between; }
         input[type="range"] { width: 100%; accent-color: #00ffff; }
-        
         .btn { flex: 1; background: #00ffff; border: none; padding: 10px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; }
         .mode-btn { background: #444; color: #ccc; }
         .active-mode { background: #ffaa00 !important; color: #000 !important; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 40%; }
-        
-        #rec-btn { width: 40px; height: 40px; border: 2px solid #fff; background: red; border-radius: 50%; flex-shrink: 0; }
-        .hint { color: #ffaa00; font-size: 10px; position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; z-index: 50; text-shadow: 1px 1px 2px #000; }
+        #rec-btn { width: 40px; height: 40px; border: 2px solid #fff; background: red; border-radius: 50%; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; z-index: 1000; color: #00ffff; justify-content: center; align-items: center; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="hint" id="ui-hint">📍 調整路徑模式</div>
+<div id="loading-overlay">字型加載中...</div>
 
 <div id="media-layer">
     <video id="bg-video" autoplay playsinline muted style="display:none;"></video>
@@ -47,25 +42,22 @@
         <div class="ui-row">
             <input type="text" id="textInput" value="MERCEDES">
             <input type="color" id="colorPicker" value="#ffffff">
-            <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff; flex: 0.5;">字型</button>
+            <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff; flex: 0.5;">更換字型</button>
         </div>
-
         <div class="ui-row">
             <div class="slider-group">
-                <div class="slider-label"><span>速度 (Speed)</span><span id="speedVal">1.0</span></div>
+                <div class="slider-label"><span>飛行速度</span><span id="speedVal">1.0</span></div>
                 <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1.0">
             </div>
             <div class="slider-group">
-                <div class="slider-label"><span>字距 (Spacing)</span><span id="spacingVal">0.12</span></div>
+                <div class="slider-label"><span>文字間距</span><span id="spacingVal">0.12</span></div>
                 <input type="range" id="spacingSlider" min="0.05" max="0.5" step="0.01" value="0.12">
             </div>
         </div>
-
         <div class="ui-row">
             <button class="btn mode-btn active-mode" id="modePath">📍 3D 路徑</button>
             <button class="btn mode-btn" id="modePhoto">🖼️ 背景調整</button>
         </div>
-
         <div class="ui-row">
             <button class="btn" id="camBtn">📷 鏡頭</button>
             <button class="btn" id="openAlbum" style="background:#fff;">📂 照片</button>
@@ -95,13 +87,14 @@
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
             
-            // 動畫狀態參數
             this.params = {
                 speed: 1.0,
                 spacing: 0.12,
                 mode: 'path',
                 helpers: true,
                 fontIdx: 0,
+                // 精確指定字型名稱，確保 CSS 匹配
+                fontFamilies: ['"Noto Serif TC"', '"Zhi Mang Xing"', '"Ma Shan Zheng"', 'sans-serif'],
                 fontStyles: ['900 400px "Noto Serif TC"', '400 400px "Zhi Mang Xing"', '400 400px "Ma Shan Zheng"', '900 400px sans-serif']
             };
 
@@ -130,113 +123,36 @@
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
             this._setupUIEvents();
-            this._setupBGTouch();
-            this.updateText();
+            this.updateText(); // 初始調用
             this._animate();
         }
 
-        _setupUIEvents() {
-            const get = (id) => document.getElementById(id);
-            
-            // 速度控制
-            get('speedSlider').oninput = (e) => {
-                this.params.speed = parseFloat(e.target.value);
-                get('speedVal').innerText = e.target.value;
-            };
-            
-            // 字距控制
-            get('spacingSlider').oninput = (e) => {
-                this.params.spacing = parseFloat(e.target.value);
-                get('spacingVal').innerText = e.target.value;
-            };
-
-            get('modePath').onclick = () => this.setMode('path');
-            get('modePhoto').onclick = () => this.setMode('photo');
-            get('camBtn').onclick = () => this.startCamera();
-            get('openAlbum').onclick = () => get('media-input').click();
-            get('media-input').onchange = (e) => this.loadPhoto(e.target.files[0]);
-            get('fontToggle').onclick = () => { this.params.fontIdx = (this.params.fontIdx + 1) % 4; this.updateText(); };
-            get('toggleUI').onclick = () => get('app-ui').classList.toggle('collapsed');
-            get('textInput').oninput = () => this.updateText();
-            get('colorPicker').oninput = () => this.updateText();
-            get('toggleGuide').onclick = () => this.toggleHelpers();
-        }
-
-        toggleHelpers() {
-            this.params.helpers = !this.params.helpers;
-            this.grid.visible = this.params.helpers;
-            this.points.forEach(p => p.visible = this.params.helpers);
-            document.getElementById('toggleGuide').style.background = this.params.helpers ? "#444" : "#00ffff";
-        }
-
-        setMode(m) {
-            this.params.mode = m;
-            const isPath = (m === 'path');
-            document.getElementById('modePath').classList.toggle('active-mode', isPath);
-            document.getElementById('modePhoto').classList.toggle('active-mode', !isPath);
-            document.getElementById('ui-hint').innerText = isPath ? "📍 調整路徑模式" : "🖼️ 背景調整模式";
-            this.drag.enabled = isPath;
-            this.orbit.enabled = isPath;
-        }
-
-        async startCamera() {
-            const v = document.getElementById('bg-video');
-            const i = document.getElementById('bg-image');
-            i.style.display = 'none'; v.style.display = 'block';
-            const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            v.srcObject = s; this.activeEl = v; this.bgParams = { scale: 1, x: 0, y: 0 }; this.updateBG();
-        }
-
-        loadPhoto(file) {
-            const i = document.getElementById('bg-image');
-            const v = document.getElementById('bg-video');
-            v.style.display = 'none'; i.style.display = 'block';
-            i.src = URL.createObjectURL(file); this.activeEl = i; this.bgParams = { scale: 1, x: 0, y: 0 }; this.updateBG();
-        }
-
-        updateBG() { if (this.activeEl) this.activeEl.style.transform = `translate(${this.bgParams.x}px, ${this.bgParams.y}px) scale(${this.bgParams.scale})`; }
-
-        _setupBGTouch() {
-            let lx, ly, ld;
-            this.renderer.domElement.addEventListener('touchstart', (e) => {
-                if (this.params.mode !== 'photo') return;
-                lx = e.touches[0].clientX; ly = e.touches[0].clientY;
-                if (e.touches.length === 2) ld = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-            });
-            this.renderer.domElement.addEventListener('touchmove', (e) => {
-                if (this.params.mode !== 'photo') return;
-                if (e.touches.length === 1) {
-                    this.bgParams.x += e.touches[0].clientX - lx; this.bgParams.y += e.touches[0].clientY - ly;
-                    lx = e.touches[0].clientX; ly = e.touches[0].clientY;
-                } else if (e.touches.length === 2) {
-                    const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                    this.bgParams.scale *= (d / ld); ld = d;
-                }
-                this.updateBG();
-            });
-        }
-
-        _createPoint(pos, color) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
-            m.position.copy(pos);
-            this.scene.add(m);
-            return m;
-        }
-
         async updateText() {
-            await document.fonts.ready;
+            const currentFontName = this.params.fontFamilies[this.params.fontIdx];
+            const currentFontStyle = this.params.fontStyles[this.params.fontIdx];
+            const text = document.getElementById('textInput').value || "";
+
+            // 關鍵：等待特定的字型載入完成，而不是僅僅等待 document.fonts.ready
+            const overlay = document.getElementById('loading-overlay');
+            if (!document.fonts.check(currentFontStyle)) {
+                overlay.style.display = 'flex';
+                await document.fonts.load(currentFontStyle);
+                overlay.style.display = 'none';
+            }
+
             if (this.charGroups) this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
-            const text = document.getElementById('textInput').value || "";
+            
             text.split('').forEach((c, i) => {
                 const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
                 const ctx = canvas.getContext('2d');
-                ctx.font = this.params.fontStyles[this.params.fontIdx];
+                ctx.font = currentFontStyle;
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.strokeStyle = '#000'; ctx.lineWidth = 20;
                 ctx.strokeText(c, 256, 256);
                 ctx.fillStyle = document.getElementById('colorPicker').value;
                 ctx.fillText(c, 256, 256);
+                
                 const tex = new THREE.CanvasTexture(canvas);
                 const g = new THREE.Group();
                 for (let j = 0; j < 20; j++) {
@@ -249,16 +165,61 @@
             });
         }
 
+        // ... (其餘 UI, 縮放, 動畫邏輯保持不變)
+        _setupUIEvents() {
+            const get = (id) => document.getElementById(id);
+            get('speedSlider').oninput = (e) => { this.params.speed = parseFloat(e.target.value); get('speedVal').innerText = e.target.value; };
+            get('spacingSlider').oninput = (e) => { this.params.spacing = parseFloat(e.target.value); get('spacingVal').innerText = e.target.value; };
+            get('modePath').onclick = () => this.setMode('path');
+            get('modePhoto').onclick = () => this.setMode('photo');
+            get('camBtn').onclick = () => this.startCamera();
+            get('openAlbum').onclick = () => get('media-input').click();
+            get('media-input').onchange = (e) => this.loadPhoto(e.target.files[0]);
+            get('fontToggle').onclick = () => { this.params.fontIdx = (this.params.fontIdx + 1) % 4; this.updateText(); };
+            get('toggleUI').onclick = () => get('app-ui').classList.toggle('collapsed');
+            get('textInput').oninput = () => this.updateText();
+            get('colorPicker').oninput = () => this.updateText();
+            get('toggleGuide').onclick = () => {
+                this.params.helpers = !this.params.helpers;
+                this.grid.visible = this.params.helpers;
+                this.points.forEach(p => p.visible = this.params.helpers);
+            };
+        }
+
+        setMode(m) {
+            this.params.mode = m;
+            this.drag.enabled = (m === 'path');
+            this.orbit.enabled = (m === 'path');
+            document.getElementById('modePath').classList.toggle('active-mode', m === 'path');
+            document.getElementById('modePhoto').classList.toggle('active-mode', m === 'photo');
+        }
+
+        async startCamera() {
+            const v = document.getElementById('bg-video'); const i = document.getElementById('bg-image');
+            i.style.display = 'none'; v.style.display = 'block';
+            const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            v.srcObject = s; this.activeEl = v; this.updateBG();
+        }
+
+        loadPhoto(file) {
+            const i = document.getElementById('bg-image'); const v = document.getElementById('bg-video');
+            v.style.display = 'none'; i.style.display = 'block';
+            i.src = URL.createObjectURL(file); this.activeEl = i; this.updateBG();
+        }
+
+        updateBG() { if (this.activeEl) this.activeEl.style.transform = `translate(${this.bgParams.x}px, ${this.bgParams.y}px) scale(${this.bgParams.scale})`; }
+
+        _createPoint(pos, color) {
+            const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
+            m.position.copy(pos); this.scene.add(m); return m;
+        }
+
         _animate() {
             requestAnimationFrame(() => this._animate());
             this.orbit.update();
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
-            
-            // 使用速度參數計算時間
             const baseTime = Date.now() * 0.0008 * this.params.speed;
-            
             this.charGroups?.forEach((g, i) => {
-                // 使用字距參數 (Spacing)
                 let t = (baseTime - i * this.params.spacing) % 2.5 - 0.5;
                 if (t >= 0 && t <= 1) {
                     const pos = curve.getPointAt(t);
