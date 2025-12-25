@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR - Typography Fix</title>
+    <title>FlipBoardAR - Font Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Noto+Sans+TC:wght@900&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
         #video-preview { position: absolute; width: 1px; height: 1px; opacity: 0; }
         #app-ui {
@@ -22,7 +23,7 @@
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 40%; font-size: 14px; }
         #rec-btn { width: 45px; height: 45px; border: 3px solid #fff; background: red; border-radius: 50%; }
         input[type="file"] { display: none; }
-        span { color: #00ffff; font-size: 10px; white-space: nowrap; }
+        span { color: #00ffff; font-size: 10px; }
     </style>
 </head>
 <body>
@@ -32,24 +33,24 @@
 <div id="canvas-container"></div>
 
 <div id="app-ui">
-    <div class="tab-handle" id="toggleUI">🔼 點擊展開/縮小控制台</div>
+    <div class="tab-handle" id="toggleUI">🔼 展開面板</div>
     <div class="ui-content">
         <div class="ui-row">
             <input type="text" id="textInput" value="賓士 MERCEDES">
             <input type="color" id="colorPicker" value="#ffffff" style="width:30px; height:30px; border:none; background:none;">
-            <button class="btn font-btn" id="fontToggle">🔠 中文風格切換</button>
+            <button class="btn font-btn" id="fontToggle">🔠 點此切換字型</button>
         </div>
         <div class="ui-row">
-            <button class="btn" id="camBtn" style="background:#ff00ff; color:#fff;">📷 鏡頭切換</button>
-            <button class="btn" id="openAlbum" style="background:#fff;">📂 選擇媒體</button>
+            <button class="btn" id="camBtn" style="background:#ff00ff; color:#fff;">📷 鏡頭</button>
+            <button class="btn" id="openAlbum" style="background:#fff;">📂 相簿</button>
             <button class="btn" id="toggleGuide" style="background:#666; color:#fff; flex:0.3;">👁️</button>
             <div id="rec-btn"></div>
         </div>
         <div class="ui-row">
             <span>流速</span>
             <input type="range" id="speedSlider" min="1" max="100" value="20" style="width: 35%;">
-            <span>密合度(字距)</span>
-            <input type="range" id="gapSlider" min="5" max="50" value="20" style="width: 35%;">
+            <span>密合(字距)</span>
+            <input type="range" id="gapSlider" min="1" max="50" value="15" style="width: 35%;">
         </div>
     </div>
 </div>
@@ -63,22 +64,22 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    class ARTypographyApp {
+    class ARFontFixApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             
-            // 針對中文字型風格
+            // 關鍵：強迫調用 Google Fonts 的字體名稱
             this.fontStyles = [
-                'bold 400px "PingFang TC"',       // 現代黑體
-                '400 400px "STKaiti", "楷體"',    // 優雅楷體
-                '900 400px "LiSu", "隸書"',       // 復古隸書
-                'bold 400px "PMingLiU", "新細明體"' // 經典宋體
+                '900 400px "Noto Sans TC"',      // 超粗黑體
+                '900 400px "Noto Serif TC"',     // 華麗宋體
+                '400 400px "Ma Shan Zheng"',     // 狂草書體
+                'bold 400px monospace'           // 科技等寬
             ];
-            this.fontNames = ["現代黑體", "優雅楷體", "藝術隸書", "經典宋體"];
+            this.fontNames = ["科技黑體", "奢華宋體", "霸氣草書", "數位字元"];
             this.currentFontIdx = 0;
-            this.charGap = 0.2; // 預設更小的字距
+            this.charGap = 0.15;
             this.init();
         }
 
@@ -103,18 +104,18 @@
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
-            // 事件綁定
+            // 即時更新
+            const refresh = () => this.updateText();
             document.getElementById('fontToggle').onclick = () => {
                 this.currentFontIdx = (this.currentFontIdx + 1) % this.fontStyles.length;
                 document.getElementById('fontToggle').innerText = `🔠 ${this.fontNames[this.currentFontIdx]}`;
-                this.updateText();
+                refresh();
             };
 
-            const refresh = () => this.updateText();
             document.getElementById('colorPicker').oninput = refresh;
             document.getElementById('textInput').oninput = refresh;
             document.getElementById('gapSlider').oninput = (e) => {
-                // 將字距邏輯改為 0.05 ~ 0.5 之間的精細調整
+                // 字距精細化：0.01 為極限貼合
                 this.charGap = e.target.value / 100;
                 refresh();
             };
@@ -146,7 +147,7 @@
                 video.srcObject = this.stream;
                 this.scene.background = new THREE.VideoTexture(video);
                 this.toggleHelpers(false);
-            } catch (err) { alert("鏡頭權限錯誤"); }
+            } catch (err) { alert("鏡頭異常"); }
         }
 
         handleAlbum(file) {
@@ -155,7 +156,6 @@
             reader.onload = (e) => {
                 new THREE.TextureLoader().load(e.target.result, (tex) => {
                     this.scene.background = tex;
-                    this.toggleHelpers(false);
                 });
             };
             reader.readAsDataURL(file);
@@ -173,11 +173,8 @@
             if (this.charGroups) this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
             const text = document.getElementById('textInput').value || "";
-            const chars = text.split('');
-            
-            chars.forEach((c, i) => {
+            text.split('').forEach((c, i) => {
                 const g = this.createCharGroup(c);
-                // 關鍵修正：字距偏移計算
                 g.userData.tOffset = -i * this.charGap;
                 this.scene.add(g);
                 this.charGroups.push(g);
@@ -188,22 +185,18 @@
             const g = new THREE.Group();
             const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-            
             ctx.font = this.fontStyles[this.currentFontIdx];
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            
-            // 雙層描邊防止中文筆畫過細
-            ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineWidth = 25;
+            ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 30;
             ctx.strokeText(char, 256, 256);
-            
             ctx.fillStyle = document.getElementById('colorPicker').value;
             ctx.fillText(char, 256, 256);
             
             const tex = new THREE.CanvasTexture(canvas);
-            const layers = 18; // 增加中文立體感
+            const layers = 20; // 強化厚度
             for (let j = 0; j < layers; j++) {
                 const m = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.05 }));
-                m.position.z = -j * 1.3;
+                m.position.z = -j * 1.5;
                 m.material.opacity = (1 - j/layers);
                 g.add(m);
             }
@@ -220,19 +213,15 @@
             requestAnimationFrame(() => this.animate());
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
             const time = Date.now() * this.flowSpeed;
-            
             this.charGroups.forEach(g => {
-                // 修正循環範圍，確保字首字尾不會在路徑頭尾打架
-                let t = (time + g.userData.tOffset) % 2.5 - 0.7; 
+                let t = (time + g.userData.tOffset) % 2.8 - 0.9; 
                 if (t >= 0 && t <= 1) {
                     const pos = curve.getPointAt(t);
                     g.position.copy(pos);
                     g.lookAt(pos.clone().add(curve.getTangentAt(t).normalize()));
                     g.rotateY(Math.PI / 2);
                     g.visible = true;
-                } else {
-                    g.visible = false;
-                }
+                } else g.visible = false;
             });
             this.renderer.render(this.scene, this.camera);
         }
@@ -246,7 +235,7 @@
                 this.recorder.onstop = () => {
                     const blob = new Blob(this.chunks, { type: 'video/webm' });
                     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                    a.download = `Mercedes_TextAR.webm`; a.click();
+                    a.download = `FlipBoard_Final.webm`; a.click();
                     this.toggleHelpers(true);
                 };
                 this.recorder.start();
@@ -254,7 +243,8 @@
             } else { this.recorder.stop(); btn.style.background = "red"; }
         }
     }
-    new ARTypographyApp();
+    // 確保字體加載後再啟動
+    window.onload = () => new ARFontFixApp();
 </script>
 </body>
 </html>
