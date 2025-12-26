@@ -3,34 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR Pro - Video Fixed</title>
+    <title>FlipBoardAR Pro - Stop Fix</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Long+Cang&family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
-        /* 隱藏原始媒體層，因為我們現在統一在錄影畫布中顯示 */
         #media-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; visibility: hidden; }
+        
         #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); transition: transform 0.3s; border-top: 1px solid #333; }
         #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
+        
+        /* 🛑 獨立停止錄影鍵：錄影時才會出現 */
+        #stop-rec-overlay { 
+            position: fixed; top: 20px; right: 20px; z-index: 500; 
+            background: rgba(255,0,0,0.8); color: white; padding: 10px 20px; 
+            border-radius: 30px; font-weight: bold; display: none; 
+            border: 2px solid white; animation: pulse 1s infinite;
+        }
+
         .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; cursor: pointer; font-weight: bold; }
         .ui-content { padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        .slider-group { flex: 1; display: flex; flex-direction: column; }
-        .slider-label { color: #00ffff; font-size: 10px; margin-bottom: 4px; display: flex; justify-content: space-between; }
-        input[type="range"] { width: 100%; accent-color: #00ffff; }
         .btn { flex: 1; background: #00ffff; border: none; padding: 10px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; color: #000; }
-        .mode-btn { background: #444; color: #ccc; }
-        .active-mode { background: #ffaa00 !important; color: #000 !important; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 45%; }
         #rec-btn { width: 48px; height: 48px; border: 3px solid #fff; background: #ff0000; border-radius: 50%; cursor: pointer; }
-        #rec-btn.recording { background: #fff; border-radius: 8px; animation: pulse 1s infinite; }
+        
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; z-index: 1000; color: #00ffff; justify-content: center; align-items: center; }
     </style>
 </head>
 <body>
 
-<div id="loading-overlay">正在合成影片...</div>
+<div id="stop-rec-overlay">⏹ 停止錄影並存檔</div>
+<div id="loading-overlay">正在合成與匯出影片...</div>
 
 <div id="media-layer">
     <video id="bg-video" autoplay playsinline muted></video>
@@ -43,17 +48,9 @@
     <div class="tab-handle" id="toggleUI">🔼 收合選單</div>
     <div class="ui-content">
         <div class="ui-row">
-            <input type="text" id="textInput" value="修復成功">
+            <input type="text" id="textInput" value="錄影正常">
             <input type="color" id="colorPicker" value="#00ffff">
             <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff; flex:0.6;">字型</button>
-        </div>
-        <div class="ui-row">
-            <div class="slider-group"><input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1.0"></div>
-            <div class="slider-group"><input type="range" id="spacingSlider" min="0.01" max="0.5" step="0.01" value="0.12"></div>
-        </div>
-        <div class="ui-row">
-            <button class="btn mode-btn active-mode" id="modePath">📍 路徑</button>
-            <button class="btn mode-btn" id="modePhoto">🖼️ 背景</button>
         </div>
         <div class="ui-row">
             <button class="btn" id="camBtn">📷 啟動相機</button>
@@ -78,13 +75,11 @@
     class ARFinalFix {
         constructor() {
             this.scene = new THREE.Scene();
-            // preserveDrawingBuffer 是錄影不閃爍的關鍵
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
             
-            // 合成畫布：這才是妳眼睛看到的與錄到的東西
             this.displayCanvas = document.createElement('canvas');
-            this.ctx = this.displayCanvas.getContext('2d');
+            this.ctx = this.displayCanvas.getContext('2d', { alpha: false }); // 關閉透明提升合成性能
             
             this.params = { speed: 1.0, spacing: 0.12, mode: 'path', helpers: true, fontIdx: 0, fontStyles: ['900 400px "Noto Serif TC"', '400 400px "Long Cang"', '400 400px "ZCOOL QingKe HuangYou"', '900 400px "Noto Sans TC"'] };
             this.bgParams = { scale: 1, x: 0, y: 0 };
@@ -95,14 +90,13 @@
         }
 
         init() {
-            this.displayCanvas.width = window.innerWidth * window.devicePixelRatio;
-            this.displayCanvas.height = window.innerHeight * window.devicePixelRatio;
+            this.displayCanvas.width = window.innerWidth;
+            this.displayCanvas.height = window.innerHeight;
             this.displayCanvas.style.width = "100vw";
             this.displayCanvas.style.height = "100vh";
             document.getElementById('canvas-container').appendChild(this.displayCanvas);
 
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.setPixelRatio(window.devicePixelRatio);
             this.camera.position.set(0, 200, 1000);
             this.orbit = new OrbitControls(this.camera, this.displayCanvas);
             
@@ -116,14 +110,23 @@
             this._renderLoop();
         }
 
+        _bindUI() {
+            const get = (id) => document.getElementById(id);
+            get('camBtn').onclick = () => this.startCamera();
+            get('openAlbum').onclick = () => get('media-input').click();
+            get('media-input').onchange = (e) => this.loadPhoto(e.target.files[0]);
+            get('rec-btn').onclick = () => this.startRecording();
+            get('stop-rec-overlay').onclick = () => this.stopRecording();
+            get('toggleUI').onclick = () => get('app-ui').classList.toggle('collapsed');
+            get('fontToggle').onclick = () => { this.params.fontIdx = (this.params.fontIdx + 1) % 4; this.updateText(); };
+            get('textInput').oninput = () => this.updateText();
+        }
+
         async startCamera() {
             const v = document.getElementById('bg-video');
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
             v.srcObject = stream;
-            v.onloadedmetadata = () => {
-                v.play();
-                this.activeMedia = v;
-            };
+            v.onloadedmetadata = () => { v.play(); this.activeMedia = v; };
         }
 
         loadPhoto(file) {
@@ -132,96 +135,68 @@
             i.onload = () => this.activeMedia = i;
         }
 
+        startRecording() {
+            this.isRecording = true;
+            document.getElementById('stop-rec-overlay').style.display = 'block';
+            document.getElementById('app-ui').classList.add('collapsed');
+            if(this.params.helpers) this.toggleHelpers();
+
+            const stream = this.displayCanvas.captureStream(30); // 鎖定 30fps 確保穩定
+            this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            this.recordedChunks = [];
+            this.mediaRecorder.ondataavailable = e => this.recordedChunks.push(e.data);
+            this.mediaRecorder.onstop = () => this._export();
+            this.mediaRecorder.start();
+        }
+
+        stopRecording() {
+            this.isRecording = false;
+            this.mediaRecorder.stop();
+            document.getElementById('stop-rec-overlay').style.display = 'none';
+        }
+
+        _export() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+            const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `AR_Recording_${Date.now()}.webm`;
+            a.click();
+            setTimeout(() => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                document.getElementById('app-ui').classList.remove('collapsed');
+                this.toggleHelpers();
+            }, 800);
+        }
+
         _renderLoop() {
             requestAnimationFrame(() => this._renderLoop());
-            
-            // 1. 渲染 Three.js 文字層
             this.orbit.update();
             this._animateText();
             this.renderer.render(this.scene, this.camera);
 
-            // 2. 核心合成：把相機和 3D 文字畫到 displayCanvas
             const cw = this.displayCanvas.width;
             const ch = this.displayCanvas.height;
-            this.ctx.clearRect(0, 0, cw, ch);
-            this.ctx.save();
+            this.ctx.fillStyle = "#000";
+            this.ctx.fillRect(0, 0, cw, ch);
             
-            // 繪製背景
             if (this.activeMedia) {
-                this.ctx.translate(cw/2 + this.bgParams.x * 2, ch/2 + this.bgParams.y * 2);
+                this.ctx.save();
+                this.ctx.translate(cw/2, ch/2);
                 this.ctx.scale(this.bgParams.scale, this.bgParams.scale);
                 const w = this.activeMedia.videoWidth || this.activeMedia.naturalWidth;
                 const h = this.activeMedia.videoHeight || this.activeMedia.naturalHeight;
-                const aspect = w / h;
-                const drawH = ch;
-                const drawW = drawH * aspect;
-                this.ctx.drawImage(this.activeMedia, -drawW/2, -drawH/2, drawW, drawH);
+                const drawW = ch * (w/h);
+                this.ctx.drawImage(this.activeMedia, -drawW/2, -ch/2, drawW, ch);
+                this.ctx.restore();
             }
-            this.ctx.restore();
-            
-            // 疊加 3D 文字
             this.ctx.drawImage(this.renderer.domElement, 0, 0, cw, ch);
         }
 
-        handleRecording() {
-            if (this.isRecording) {
-                this.isRecording = false;
-                this.mediaRecorder.stop();
-                return;
-            }
-            this.isRecording = true;
-            document.getElementById('rec-btn').classList.add('recording');
-            document.getElementById('app-ui').classList.add('collapsed');
-            if(this.params.helpers) this.toggleHelpers();
-
-            const stream = this.displayCanvas.captureStream(60);
-            this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
-            this.recordedChunks = [];
-            this.mediaRecorder.ondataavailable = e => this.recordedChunks.push(e.data);
-            this.mediaRecorder.onstop = () => {
-                const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `AR_Works_${Date.now()}.webm`;
-                a.click();
-                document.getElementById('rec-btn').classList.remove('recording');
-                document.getElementById('app-ui').classList.remove('collapsed');
-                this.toggleHelpers();
-            };
-            this.mediaRecorder.start();
-        }
-
-        // ...基礎邏輯保持不變...
-        _bindUI() {
-            const get = (id) => document.getElementById(id);
-            get('speedSlider').oninput = (e) => this.params.speed = parseFloat(e.target.value);
-            get('spacingSlider').oninput = (e) => this.params.spacing = parseFloat(e.target.value);
-            get('modePath').onclick = () => this.setMode('path');
-            get('modePhoto').onclick = () => this.setMode('photo');
-            get('camBtn').onclick = () => this.startCamera();
-            get('openAlbum').onclick = () => get('media-input').click();
-            get('media-input').onchange = (e) => this.loadPhoto(e.target.files[0]);
-            get('rec-btn').onclick = () => this.handleRecording();
-            get('toggleUI').onclick = () => get('app-ui').classList.toggle('collapsed');
-            get('fontToggle').onclick = () => { this.params.fontIdx = (this.params.fontIdx + 1) % 4; this.updateText(); };
-            get('textInput').oninput = () => this.updateText();
-            get('colorPicker').oninput = () => this.updateText();
-            get('toggleGuide').onclick = () => this.toggleHelpers(true);
-            this._setupBGTouch();
-        }
-
-        setMode(m) { this.params.mode = m; this.drag.enabled = (m === 'path'); this.orbit.enabled = (m === 'path'); document.getElementById('modePath').classList.toggle('active-mode', m === 'path'); document.getElementById('modePhoto').classList.toggle('active-mode', m === 'photo'); }
-        toggleHelpers(m=false) { if(m) this.params.helpers=!this.params.helpers; this.grid.visible=this.params.helpers; this.points.forEach(p=>p.visible=this.params.helpers); }
-        _createPoint(pos, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 })); m.position.copy(pos); this.scene.add(m); return m; }
-        _setupBGTouch() {
-            let lx, ly, ld;
-            this.displayCanvas.addEventListener('touchstart', (e) => { if (this.params.mode !== 'photo') return; lx = e.touches[0].clientX; ly = e.touches[0].clientY; if (e.touches.length === 2) ld = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); });
-            this.displayCanvas.addEventListener('touchmove', (e) => {
-                if (this.params.mode !== 'photo') return;
-                if (e.touches.length === 1) { this.bgParams.x += e.touches[0].clientX - lx; this.bgParams.y += e.touches[0].clientY - ly; lx = e.touches[0].clientX; ly = e.touches[0].clientY; }
-                else if (e.touches.length === 2) { const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); this.bgParams.scale *= (d / ld); ld = d; }
-            });
-        }
+        // ...基礎 3D 邏輯...
+        toggleHelpers() { this.params.helpers=!this.params.helpers; this.grid.visible=this.params.helpers; this.points.forEach(p=>p.visible=this.params.helpers); }
+        _createPoint(pos, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color })); m.position.copy(pos); this.scene.add(m); return m; }
         async updateText() {
             const style = this.params.fontStyles[this.params.fontIdx];
             if (!document.fonts.check(style)) await document.fonts.load(style);
@@ -232,14 +207,12 @@
                 const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
                 const ctx = canvas.getContext('2d');
                 ctx.font = style; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.strokeStyle = '#000'; ctx.lineWidth = 15; ctx.strokeText(c, 256, 256);
                 ctx.fillStyle = document.getElementById('colorPicker').value; ctx.fillText(c, 256, 256);
                 const tex = new THREE.CanvasTexture(canvas);
                 const g = new THREE.Group();
-                for (let j = 0; j < 20; j++) {
-                    const m = new THREE.Mesh(new THREE.PlaneGeometry(85, 85), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1, side: THREE.DoubleSide }));
-                    m.position.z = -j * 1.8; m.material.opacity = (1 - j/22);
-                    g.add(m);
+                for (let j = 0; j < 10; j++) {
+                    const m = new THREE.Mesh(new THREE.PlaneGeometry(85, 85), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
+                    m.position.z = -j * 2; g.add(m);
                 }
                 this.scene.add(g); this.charGroups.push(g);
             });
@@ -249,7 +222,7 @@
             const baseTime = Date.now() * 0.0008 * this.params.speed;
             this.charGroups?.forEach((g, i) => {
                 let t = (baseTime - i * this.params.spacing) % 2.5 - 0.5;
-                if (t >= 0 && t <= 1) { const pos = curve.getPointAt(t); g.position.copy(pos); g.lookAt(pos.clone().add(curve.getTangentAt(t).normalize())); g.rotateY(Math.PI / 2); g.visible = true; } else g.visible = false;
+                if (t >= 0 && t <= 1) { const pos = curve.getPointAt(t); g.position.copy(pos); g.lookAt(pos.clone().add(curve.getTangentAt(t))); g.rotateY(Math.PI / 2); g.visible = true; } else g.visible = false;
             });
         }
     }
