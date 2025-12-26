@@ -3,33 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>FlipBoardAR - UI Restore</title>
+    <title>FlipBoardAR - Fix Scale</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Long+Cang&family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; height: 100vh; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
         #media-layer { position: absolute; visibility: hidden; pointer-events: none; }
         
-        /* 友善介面設計 */
-        #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.8); backdrop-filter: blur(20px); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-top: 1px solid rgba(255,255,255,0.1); padding-bottom: env(safe-area-inset-bottom); }
-        #app-ui.collapsed { transform: translateY(calc(100% - 45px)); }
+        #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.8); backdrop-filter: blur(15px); transition: transform 0.3s; border-top: 1px solid #444; padding-bottom: env(safe-area-inset-bottom); }
+        #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
         
-        .tab-handle { height: 45px; display: flex; justify-content: center; align-items: center; color: #00ffff; cursor: pointer; font-weight: bold; letter-spacing: 2px; }
-        .ui-content { padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-        .ui-row { width: 90%; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        
-        .btn { flex: 1; height: 45px; background: #333; border: 1px solid #555; border-radius: 10px; color: #fff; font-weight: bold; font-size: 13px; display: flex; justify-content: center; align-items: center; }
-        .btn-active { background: #00ffff !important; color: #000 !important; border-color: #fff !important; }
-        .btn-rec { width: 55px; height: 55px; background: #ff0000; border: 4px solid #fff; border-radius: 50%; }
-        
-        input[type="text"] { background: #1a1a1a; border: 1px solid #444; color: #fff; padding: 12px; border-radius: 8px; flex: 1.5; font-size: 16px; }
-        
-        #stop-rec-overlay { position: fixed; top: 50px; left: 50%; transform: translateX(-50%); z-index: 500; background: #ff0000; color: white; padding: 15px 30px; border-radius: 50px; font-weight: bold; display: none; box-shadow: 0 5px 20px rgba(0,0,0,0.5); }
+        .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; cursor: pointer; font-weight: bold; }
+        .ui-content { padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .btn { flex: 1; height: 42px; background: #333; border: 1px solid #555; border-radius: 8px; color: #fff; font-weight: bold; font-size: 12px; display: flex; justify-content: center; align-items: center; }
+        .btn-active { background: #00ffff !important; color: #000 !important; }
+        input[type="text"] { background: #111; border: 1px solid #0ff; color: #fff; padding: 10px; border-radius: 6px; flex: 1.5; }
+        #rec-btn { width: 50px; height: 50px; border: 3px solid #fff; background: #ff0000; border-radius: 50%; }
+        #stop-rec-overlay { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); z-index: 500; background: #ff0000; color: white; padding: 12px 25px; border-radius: 50px; font-weight: bold; display: none; }
     </style>
 </head>
 <body>
 
-<div id="stop-rec-overlay">⏹ 停止錄製並儲存</div>
+<div id="stop-rec-overlay">⏹ 停止錄製</div>
 
 <div id="media-layer">
     <video id="bg-video" autoplay playsinline muted></video>
@@ -39,22 +35,22 @@
 <div id="canvas-container"></div>
 
 <div id="app-ui">
-    <div class="tab-handle" id="toggleUI">一一一 MENU 一一一</div>
+    <div class="tab-handle" id="toggleUI">🔼 展開/收合選單</div>
     <div class="ui-content">
         <div class="ui-row">
-            <input type="text" id="textInput" value="HELLO AR">
-            <input type="color" id="colorPicker" value="#00ffff" style="width:45px; height:45px; border:none; padding:0;">
-            <button class="btn" id="fontToggle" style="flex:0.6">字型</button>
+            <input type="text" id="textInput" value="視角校正">
+            <input type="color" id="colorPicker" value="#00ffff" style="width:40px; height:40px; border:none; padding:0;">
+            <button class="btn" id="fontToggle" style="flex:0.5">字型</button>
         </div>
         <div class="ui-row">
             <button class="btn btn-active" id="modePath">📍 調整路徑</button>
             <button class="btn" id="modePhoto">🖼️ 調整背景</button>
         </div>
         <div class="ui-row">
-            <button class="btn" id="camBtn">📷 開相機</button>
-            <button class="btn" id="openAlbum">📂 選照片</button>
+            <button class="btn" id="camBtn">📷 相機</button>
+            <button class="btn" id="openAlbum">📂 相簿</button>
             <button class="btn" id="toggleGuide" style="flex:0.3">👁️</button>
-            <div class="btn-rec" id="rec-btn"></div>
+            <div id="rec-btn"></div>
         </div>
     </div>
 </div>
@@ -70,11 +66,12 @@
     import { DragControls } from 'three/addons/controls/DragControls.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    class ARFriendlyFix {
+    class ARFinalFix {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-            this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 5000);
+            // 🛠️ 縮小視野(FOV)讓物體看起來更近
+            this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
             this.displayCanvas = document.createElement('canvas');
             this.ctx = this.displayCanvas.getContext('2d');
             
@@ -90,26 +87,23 @@
             window.addEventListener('resize', () => this._resize());
             document.getElementById('canvas-container').appendChild(this.displayCanvas);
 
-            // 🛠️ 更加友善的視角：稍微俯視，讓網格有立體感
-            this.camera.position.set(0, 300, 1200);
-            this.camera.lookAt(0, 0, 0);
-
+            // 🛠️ 將相機位置放回正中心，深度拉近
+            this.camera.position.set(0, 0, 1000);
             this.orbit = new OrbitControls(this.camera, this.displayCanvas);
-            this.orbit.enableDamping = true;
+            this.orbit.enableRotate = true;
             
-            // 網格放在腳下
-            this.grid = new THREE.GridHelper(2000, 20, 0x00ffff, 0x333333);
+            // 🛠️ 網格與球的初始位置校正
+            this.grid = new THREE.GridHelper(2000, 20, 0x00ffff, 0x444444);
+            this.grid.rotation.x = Math.PI / 2; // 讓網格與螢幕平行
             this.scene.add(this.grid);
             
-            // 🛠️ 確保球在畫面上方，好點選
             this.points = [
-                this._createPoint(new THREE.Vector3(-400, 100, 0), 0x00ff00),
-                this._createPoint(new THREE.Vector3(0, 500, 0), 0xffff00),
-                this._createPoint(new THREE.Vector3(400, 100, 0), 0xff0000)
+                this._createPoint(new THREE.Vector3(-250, 0, 0), 0x00ff00),
+                this._createPoint(new THREE.Vector3(0, 350, 0), 0xffff00),
+                this._createPoint(new THREE.Vector3(250, 0, 0), 0xff0000)
             ];
             
             this.drag = new DragControls([...this.points], this.camera, this.displayCanvas);
-            // 🛠️ 重要：解決與 OrbitControls 的衝突
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
@@ -177,12 +171,24 @@
 
             const cw = this.displayCanvas.width;
             const ch = this.displayCanvas.height;
-            this.ctx.clearRect(0,0,cw,ch);
+            this.ctx.fillStyle = "#000";
+            this.ctx.fillRect(0,0,cw,ch);
             
             if (this.activeMedia) {
                 const mw = this.activeMedia.videoWidth || this.activeMedia.naturalWidth;
                 const mh = this.activeMedia.videoHeight || this.activeMedia.naturalHeight;
-                const scale = Math.max(cw / mw, ch / mh) * this.bgParams.scale;
+                
+                // 🛠️ 縮放算法改良：避免初始畫面被過度放大
+                const screenAspect = cw / ch;
+                const mediaAspect = mw / mh;
+                let scale;
+                if (screenAspect > mediaAspect) {
+                    scale = ch / mh; // 以高度適配
+                } else {
+                    scale = cw / mw; // 以寬度適配
+                }
+                
+                scale *= this.bgParams.scale;
                 const x = (cw - mw * scale) / 2 + (this.bgParams.x * window.devicePixelRatio);
                 const y = (ch - mh * scale) / 2 + (this.bgParams.y * window.devicePixelRatio);
                 this.ctx.drawImage(this.activeMedia, x, y, mw * scale, mh * scale);
@@ -190,7 +196,6 @@
             this.ctx.drawImage(this.renderer.domElement, 0, 0, cw, ch);
         }
 
-        // 錄影邏輯保持穩定
         startRecording() {
             document.getElementById('stop-rec-overlay').style.display = 'block';
             document.getElementById('app-ui').classList.add('collapsed');
@@ -200,10 +205,11 @@
             this.mediaRecorder.ondataavailable = e => this.chunks.push(e.data);
             this.mediaRecorder.onstop = () => {
                 const blob = new Blob(this.chunks, { type: 'video/webm' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'AR_Works.webm'; a.click();
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'AR_Video.webm'; a.click();
             };
             this.mediaRecorder.start();
         }
+
         stopRecording() {
             this.mediaRecorder.stop();
             document.getElementById('stop-rec-overlay').style.display = 'none';
@@ -228,7 +234,9 @@
                 }
             });
         }
-        _createPoint(pos, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(40), new THREE.MeshBasicMaterial({ color })); m.position.copy(pos); this.scene.add(m); return m; }
+
+        _createPoint(pos, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color })); m.position.copy(pos); this.scene.add(m); return m; }
+        
         async updateText() {
             const style = this.params.fontStyles[this.params.fontIdx];
             if (!document.fonts.check(style)) await document.fonts.load(style);
@@ -243,7 +251,7 @@
                 const tex = new THREE.CanvasTexture(canvas);
                 const g = new THREE.Group();
                 for (let j = 0; j < 12; j++) {
-                    const m = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
+                    const m = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
                     m.position.z = -j * 2.5; g.add(m);
                 }
                 this.scene.add(g); this.charGroups.push(g);
@@ -258,7 +266,7 @@
             });
         }
     }
-    window.onload = () => new ARFriendlyFix();
+    window.onload = () => new ARFinalFix();
 </script>
 </body>
 </html>
