@@ -3,18 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>FlipBoardAR Vertical Path</title>
+    <title>FlipBoardAR BG Fix</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Long+Cang&family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; height: 100vh; }
-        #media-bg { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-        #bg-video, #bg-image { width: 100%; height: 100%; object-fit: cover; display: none; pointer-events: none; }
+        
+        /* 🛠️ 背景修正：確保圖片不會被局部裁切 */
+        #media-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; display: flex; align-items: center; justify-content: center; background: #000; }
+        #bg-video, #bg-image { 
+            max-width: none; 
+            max-height: none;
+            display: none; 
+            pointer-events: none; 
+            transform-origin: center center; /* 從中心縮放 */
+        }
+
         #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
         #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); border-top: 1px solid #444; padding-bottom: env(safe-area-inset-bottom); }
         .ui-content { padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
         .control-group { flex: 1; display: flex; flex-direction: column; }
-        label { color: #00ffff; font-size: 10px; font-weight: bold; margin-bottom: 2px; }
+        label { color: #00ffff; font-size: 10px; font-weight: bold; }
         input[type="range"] { width: 100%; accent-color: #00ffff; }
         .btn { flex: 1; height: 40px; background: #333; border: 1px solid #555; border-radius: 8px; color: #fff; font-weight: bold; font-size: 12px; }
         input[type="text"] { background: #111; border: 1px solid #0ff; color: #fff; padding: 10px; border-radius: 6px; flex: 1.5; font-size: 14px; }
@@ -31,7 +40,7 @@
 <div id="app-ui">
     <div class="ui-content">
         <div class="ui-row">
-            <input type="text" id="textInput" value="立體垂直對齊">
+            <input type="text" id="textInput" value="修正照片縮放">
             <input type="color" id="colorPicker" value="#ffffff" style="width:40px; height:40px; border:none; background:none;">
             <button class="btn" id="fontToggle" style="flex:0.4">字型</button>
         </div>
@@ -60,13 +69,13 @@
     import { DragControls } from 'three/addons/controls/DragControls.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    class ARVerticalApp {
+    class ARBGFixApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
             this.params = { mode: 'path', helpers: true, fontIdx: 0, speed: 1.5, spacing: 0.2, fontStyles: ['900 400px "Noto Serif TC"', '400 400px "Long Cang"', '400 400px "ZCOOL QingKe HuangYou"', '900 400px "Noto Sans TC"'] };
-            this.bgParams = { scale: 1, x: 0, y: 0 };
+            this.bgParams = { scale: 1, x: 0, y: 0, baseScale: 1 };
             this.init();
         }
 
@@ -74,24 +83,19 @@
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.setPixelRatio(window.devicePixelRatio);
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
-
             this.camera.position.set(0, 500, 1500);
             this.camera.lookAt(0, 0, 0);
-
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
             this.grid = new THREE.GridHelper(2000, 20, 0x00ffff, 0x222222);
             this.scene.add(this.grid);
-            
             this.points = [
                 this._createPoint(new THREE.Vector3(-400, 100, 0), 0x00ff00),
                 this._createPoint(new THREE.Vector3(0, 500, 300), 0xffff00),
                 this._createPoint(new THREE.Vector3(400, 100, 0), 0xff0000)
             ];
-            
             this.drag = new DragControls([...this.points], this.camera, this.renderer.domElement);
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
-
             this._bindUI();
             this.updateText();
             this._renderLoop();
@@ -99,24 +103,34 @@
 
         _bindUI() {
             const get = (id) => document.getElementById(id);
-            get('speedSlider').oninput = (e) => this.params.speed = parseFloat(e.target.value);
-            get('spacingSlider').oninput = (e) => this.params.spacing = parseFloat(e.target.value);
+            get('media-input').onchange = (e) => {
+                const i = document.getElementById('bg-image');
+                const file = e.target.files[0];
+                if(!file) return;
+                i.src = URL.createObjectURL(file);
+                i.onload = () => {
+                    // 🛠️ 根據照片比例初始化縮放，確保剛好填滿螢幕
+                    const winRatio = window.innerWidth / window.innerHeight;
+                    const imgRatio = i.naturalWidth / i.naturalHeight;
+                    this.bgParams.baseScale = (imgRatio > winRatio) ? (window.innerHeight / i.naturalHeight) : (window.innerWidth / i.naturalWidth);
+                    this.bgParams.scale = 1;
+                    this.bgParams.x = 0;
+                    this.bgParams.y = 0;
+                    i.style.display = 'block';
+                    document.getElementById('bg-video').style.display = 'none';
+                    this._updateBG();
+                };
+            };
             get('switchModeBtn').onclick = () => {
                 this.params.mode = (this.params.mode === 'path' ? 'bg' : 'path');
                 get('switchModeBtn').innerText = this.params.mode === 'path' ? "🔄 調整: 路徑" : "🔄 調整: 背景";
                 this.drag.enabled = (this.params.mode === 'path');
                 this.orbit.enabled = (this.params.mode === 'path');
             };
+            get('speedSlider').oninput = (e) => this.params.speed = parseFloat(e.target.value);
+            get('spacingSlider').oninput = (e) => this.params.spacing = parseFloat(e.target.value);
             get('camBtn').onclick = () => this.startCamera();
             get('openAlbum').onclick = () => get('media-input').click();
-            get('media-input').onchange = (e) => {
-                const i = document.getElementById('bg-image');
-                i.src = URL.createObjectURL(e.target.files[0]);
-                i.style.display = 'block';
-                document.getElementById('bg-video').style.display = 'none';
-                this.bgParams = { scale: 1, x: 0, y: 0 };
-                this._updateBG();
-            };
             get('toggleGuide').onclick = () => {
                 this.params.helpers = !this.params.helpers;
                 this.grid.visible = this.params.helpers;
@@ -128,6 +142,7 @@
             get('textInput').oninput = () => this.updateText();
             get('colorPicker').oninput = () => this.updateText();
 
+            // 🛠️ 優化後的背景操作：縮放不再裁切
             let lx, ly, ld;
             const container = document.getElementById('canvas-container');
             container.addEventListener('touchstart', (e) => {
@@ -151,14 +166,20 @@
 
         _updateBG() {
             const bg = document.getElementById('bg-image').style.display === 'block' ? document.getElementById('bg-image') : document.getElementById('bg-video');
-            if(bg) bg.style.transform = `translate(${this.bgParams.x}px, ${this.bgParams.y}px) scale(${this.bgParams.scale})`;
+            if(bg) {
+                const finalScale = this.bgParams.baseScale * this.bgParams.scale;
+                bg.style.transform = `translate(${this.bgParams.x}px, ${this.bgParams.y}px) scale(${finalScale})`;
+            }
         }
 
         async startCamera() {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            document.getElementById('bg-video').srcObject = stream;
-            document.getElementById('bg-video').style.display = 'block';
+            const v = document.getElementById('bg-video');
+            v.srcObject = stream;
+            v.style.display = 'block';
             document.getElementById('bg-image').style.display = 'none';
+            this.bgParams.baseScale = 1; this.bgParams.scale = 1; this.bgParams.x = 0; this.bgParams.y = 0;
+            this._updateBG();
         }
 
         _renderLoop() {
@@ -191,33 +212,20 @@
             });
         }
         
-        // 🛠️ 核心修正：讓字面垂直於路徑
         _animateText() {
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
             const baseTime = (Date.now() / 1000) * this.params.speed;
-            
             this.charGroups?.forEach((g, i) => {
                 let progress = (baseTime - i * this.params.spacing) % 2.0; 
                 if (progress >= 0 && progress <= 1) { 
                     let t = 1.0 - progress; 
                     const pos = curve.getPointAt(t); 
-                    const tangent = curve.getTangentAt(t).normalize(); // 取得當前路徑切線
-                    
                     g.position.copy(pos); 
-                    
-                    // 🛠️ 旋轉逻辑：
-                    // 1. 讓字的 Z 軸朝向切線 (側面垂直於路徑)
-                    // 2. 使用 lookAt 讓物體對準下一個點
                     const nextPos = curve.getPointAt(Math.max(0, t - 0.01));
                     g.lookAt(nextPos);
-                    
-                    // 3. 旋轉 90 度，確保字面是立著的
                     g.rotateY(Math.PI / 2); 
-                    
                     g.visible = true; 
-                } else {
-                    g.visible = false; 
-                }
+                } else { g.visible = false; }
             });
         }
 
@@ -234,16 +242,17 @@
             this.mediaRecorder.ondataavailable = e => this.chunks.push(e.data);
             this.mediaRecorder.onstop = () => {
                 const b = new Blob(this.chunks, { type: 'video/webm' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'AR_Vertical.webm'; a.click();
+                const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'AR_Fixed_BG.webm'; a.click();
             };
             const draw = () => {
                 if(!this.isRecording) return;
                 recCtx.fillStyle = "#000"; recCtx.fillRect(0,0,recCanvas.width, recCanvas.height);
-                const bg = document.getElementById('bg-video').style.display === 'block' ? document.getElementById('bg-video') : document.getElementById('bg-image');
+                const bg = document.getElementById('bg-image').style.display === 'block' ? document.getElementById('bg-image') : document.getElementById('bg-video');
                 if(bg && (bg.videoWidth || bg.naturalWidth)) {
                     const bw = bg.videoWidth || bg.naturalWidth; const bh = bg.videoHeight || bg.naturalHeight;
-                    const s = Math.max(recCanvas.width/bw, recCanvas.height/bh) * this.bgParams.scale;
-                    recCtx.drawImage(bg, (recCanvas.width-bw*s)/2 + this.bgParams.x*window.devicePixelRatio, (recCanvas.height-bh*s)/2 + this.bgParams.y*window.devicePixelRatio, bw*s, bh*s);
+                    // 錄影也要同步背景的縮放與平移
+                    const finalS = this.bgParams.baseScale * this.bgParams.scale * window.devicePixelRatio;
+                    recCtx.drawImage(bg, (recCanvas.width-bw*finalS)/2 + this.bgParams.x*window.devicePixelRatio, (recCanvas.height-bh*finalS)/2 + this.bgParams.y*window.devicePixelRatio, bw*finalS, bh*finalS);
                 }
                 recCtx.drawImage(this.renderer.domElement, 0, 0);
                 requestAnimationFrame(draw);
@@ -252,7 +261,7 @@
         }
         stopRecording() { this.isRecording = false; this.mediaRecorder.stop(); document.getElementById('stop-rec-overlay').style.display = 'none'; }
     }
-    window.onload = () => new ARVerticalApp();
+    window.onload = () => new ARBGFixApp();
 </script>
 </body>
 </html>
