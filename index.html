@@ -3,25 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR Pro</title>
+    <title>FlipBoardAR Pro v2</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Long+Cang&family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #media-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; z-index: 1; }
         #bg-image, #bg-video { flex-shrink: 0; object-fit: contain; transform-origin: center; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: auto; }
+        
         #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); transition: transform 0.3s; border-top: 1px solid #333; }
         #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
+        
         .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; cursor: pointer; font-weight: bold; }
         .ui-content { padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        
         .slider-group { flex: 1; display: flex; flex-direction: column; }
         .slider-label { color: #00ffff; font-size: 10px; margin-bottom: 4px; display: flex; justify-content: space-between; }
         input[type="range"] { width: 100%; accent-color: #00ffff; }
+        
         .btn { flex: 1; background: #00ffff; border: none; padding: 10px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; color: #000; }
         .mode-btn { background: #444; color: #ccc; }
         .active-mode { background: #ffaa00 !important; color: #000 !important; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 45%; }
+        
+        /* 🔴 錄影鍵樣式強化 */
+        #rec-btn { 
+            width: 44px; height: 44px; border: 3px solid #fff; background: #ff0000; 
+            border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 10px rgba(255,0,0,0.5);
+            cursor: pointer; display: flex; justify-content: center; align-items: center;
+        }
+        #rec-btn:active { transform: scale(0.9); background: #aa0000; }
+
         #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; z-index: 1000; color: #00ffff; justify-content: center; align-items: center; font-weight: bold; }
         .hint { color: #ffaa00; font-size: 10px; position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; z-index: 50; }
     </style>
@@ -66,7 +79,7 @@
             <button class="btn" id="camBtn">📷 鏡頭</button>
             <button class="btn" id="openAlbum" style="background:#fff;">📂 照片</button>
             <button class="btn" id="toggleGuide" style="background:#444; color:#fff; flex:0.3;">👁️</button>
-            <div id="rec-btn" onclick="alert('準備錄影：請隱藏 UI 並開啟螢幕錄影')"></div>
+            <div id="rec-btn"></div>
         </div>
     </div>
 </div>
@@ -138,15 +151,28 @@
             get('toggleUI').onclick = () => get('app-ui').classList.toggle('collapsed');
             get('textInput').oninput = () => this.updateText();
             get('colorPicker').oninput = () => this.updateText();
-            get('toggleGuide').onclick = () => {
-                this.params.helpers = !this.params.helpers;
-                this.grid.visible = this.params.helpers;
-                this.points.forEach(p => p.visible = this.params.helpers);
-                get('toggleGuide').innerText = this.params.helpers ? "👁️" : "🙈";
+            get('toggleGuide').onclick = () => this.toggleHelpers();
+            
+            // 🔴 錄影鍵功能：自動清理畫面
+            get('rec-btn').onclick = () => {
+                this.params.helpers = true; this.toggleHelpers(); // 強制隱藏輔助物
+                get('app-ui').classList.add('collapsed'); // 收合選單
+                setTimeout(() => {
+                    alert("✨ 輔助工具已隱藏，請開啟手機螢幕錄影開始拍攝！\n(點擊上方選單可重新顯示)");
+                }, 300);
             };
+
             this._setupBGTouch();
         }
 
+        toggleHelpers() {
+            this.params.helpers = !this.params.helpers;
+            this.grid.visible = this.params.helpers;
+            this.points.forEach(p => p.visible = this.params.helpers);
+            document.getElementById('toggleGuide').innerText = this.params.helpers ? "👁️" : "🙈";
+        }
+
+        // ... 其餘邏輯 (updateText, setMode, Camera, BG, Animate) 保持不變 ...
         async updateText() {
             const style = this.params.fontStyles[this.params.fontIdx];
             if (!document.fonts.check(style)) {
@@ -181,7 +207,6 @@
             this.orbit.enabled = (m === 'path');
             document.getElementById('modePath').classList.toggle('active-mode', m === 'path');
             document.getElementById('modePhoto').classList.toggle('active-mode', m === 'photo');
-            document.getElementById('ui-hint').innerText = (m === 'path') ? "📍 調整路徑模式" : "🖼️ 背景調整模式";
         }
 
         async startCamera() {
