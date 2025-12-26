@@ -2,36 +2,39 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR Pro - Ratio Fixed V2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>FlipBoardAR Ultra</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Long+Cang&family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; height: 100vh; width: 100vw; }
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; height: 100vh; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
         #media-layer { position: absolute; visibility: hidden; pointer-events: none; }
         
-        #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); transition: transform 0.3s; border-top: 1px solid #333; }
+        #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); transition: transform 0.3s; border-top: 1px solid #333; padding-bottom: env(safe-area-inset-bottom); }
         #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
         
         #stop-rec-overlay { 
-            position: fixed; top: env(safe-area-inset-top, 20px); right: 20px; z-index: 500; 
-            background: #ff0000; color: white; padding: 12px 24px; 
+            position: fixed; top: 40px; right: 20px; z-index: 500; 
+            background: #ff0000; color: white; padding: 12px 20px; 
             border-radius: 50px; font-weight: bold; display: none; 
             border: 2px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
         .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; cursor: pointer; font-weight: bold; }
-        .ui-content { padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 8px; font-weight: bold; font-size: 11px; color: #000; }
-        #rec-btn { width: 50px; height: 50px; border: 3px solid #fff; background: #ff0000; border-radius: 50%; cursor: pointer; }
-        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; z-index: 1000; color: #00ffff; justify-content: center; align-items: center; flex-direction: column; }
+        .ui-content { padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .btn { flex: 1; background: #00ffff; border: none; padding: 12px 5px; border-radius: 8px; font-weight: bold; font-size: 11px; color: #000; text-align: center; }
+        .mode-btn { background: #444; color: #ccc; }
+        .mode-btn.active { background: #ffaa00 !important; color: #000 !important; }
+        input[type="text"] { background: #111; border: 1px solid #0ff; color: #fff; padding: 10px; border-radius: 5px; flex: 1.5; }
+        #rec-btn { width: 45px; height: 45px; border: 3px solid #fff; background: #ff0000; border-radius: 50%; cursor: pointer; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; z-index: 1000; color: #00ffff; justify-content: center; align-items: center; }
     </style>
 </head>
 <body>
 
-<div id="stop-rec-overlay">⏹ 停止錄影並下載</div>
-<div id="loading-overlay">🎥 影片合成中...</div>
+<div id="stop-rec-overlay">⏹ 停止錄製</div>
+<div id="loading-overlay">🎥 儲存中...</div>
 
 <div id="media-layer">
     <video id="bg-video" autoplay playsinline muted></video>
@@ -41,16 +44,20 @@
 <div id="canvas-container"></div>
 
 <div id="app-ui">
-    <div class="tab-handle" id="toggleUI">🔼 選單</div>
+    <div class="tab-handle" id="toggleUI">🔼 點擊收合</div>
     <div class="ui-content">
         <div class="ui-row">
-            <input type="text" id="textInput" style="background:#111; border:1px solid #0ff; color:#fff; padding:10px; width:45%; border-radius:5px;" value="比例校正成功">
-            <input type="color" id="colorPicker" value="#ffffff">
-            <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff;">更換字型</button>
+            <input type="text" id="textInput" value="比例修復完成">
+            <input type="color" id="colorPicker" value="#00ffff" style="width:40px; height:40px; border:none; background:none;">
+            <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff;">換字型</button>
         </div>
         <div class="ui-row">
-            <button class="btn" id="camBtn">📷 開啟相機</button>
-            <button class="btn" id="openAlbum" style="background:#fff;">📂 開啟照片</button>
+            <button class="btn mode-btn active" id="modePath">📍 路徑</button>
+            <button class="btn mode-btn" id="modePhoto">🖼️ 背景</button>
+        </div>
+        <div class="ui-row">
+            <button class="btn" id="camBtn">📷 相機</button>
+            <button class="btn" id="openAlbum" style="background:#fff;">📂 相簿</button>
             <button class="btn" id="toggleGuide" style="background:#444; color:#fff; flex:0.3;">👁️</button>
             <div id="rec-btn"></div>
         </div>
@@ -68,16 +75,23 @@
     import { DragControls } from 'three/addons/controls/DragControls.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    class ARRatioMaster {
+    class ARUltraFix {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
             this.displayCanvas = document.createElement('canvas');
             this.ctx = this.displayCanvas.getContext('2d');
-            this.params = { speed: 1.0, spacing: 0.12, helpers: true, fontIdx: 0, fontStyles: ['900 400px "Noto Serif TC"', '400 400px "Long Cang"', '400 400px "ZCOOL QingKe HuangYou"', '900 400px "Noto Sans TC"'] };
+            
+            this.params = { 
+                speed: 1.0, spacing: 0.12, mode: 'path', 
+                helpers: true, fontIdx: 0,
+                fontStyles: ['900 400px "Noto Serif TC"', '400 400px "Long Cang"', '400 400px "ZCOOL QingKe HuangYou"', '900 400px "Noto Sans TC"'] 
+            };
+            this.bgParams = { scale: 1, x: 0, y: 0 };
             this.activeMedia = null;
             this.isRecording = false;
+
             this.init();
         }
 
@@ -91,8 +105,16 @@
             
             this.grid = new THREE.GridHelper(2000, 25, 0x00ffff, 0x333333);
             this.scene.add(this.grid);
-            this.points = [this._createPoint(new THREE.Vector3(300, 50, 0), 0x00ff00), this._createPoint(new THREE.Vector3(0, 300, 200), 0xffff00), this._createPoint(new THREE.Vector3(-300, 50, 0), 0xff0000)];
+            
+            this.points = [
+                this._createPoint(new THREE.Vector3(300, 50, 0), 0x00ff00),
+                this._createPoint(new THREE.Vector3(0, 300, 200), 0xffff00),
+                this._createPoint(new THREE.Vector3(-300, 50, 0), 0xff0000)
+            ];
+            
             this.drag = new DragControls([...this.points], this.camera, this.displayCanvas);
+            this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
+            this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
 
             this._bindUI();
             this.updateText();
@@ -101,28 +123,60 @@
 
         _resize() {
             const pr = window.devicePixelRatio || 1;
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            this.displayCanvas.width = w * pr;
-            this.displayCanvas.height = h * pr;
-            this.renderer.setSize(w, h);
-            this.camera.aspect = w / h;
+            this.displayCanvas.width = window.innerWidth * pr;
+            this.displayCanvas.height = window.innerHeight * pr;
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
         }
 
+        _bindUI() {
+            const get = (id) => document.getElementById(id);
+            get('camBtn').onclick = () => this.startCamera();
+            get('openAlbum').onclick = () => get('media-input').click();
+            get('media-input').onchange = (e) => {
+                const i = document.getElementById('bg-image');
+                i.src = URL.createObjectURL(e.target.files[0]);
+                i.onload = () => this.activeMedia = i;
+            };
+            get('modePath').onclick = () => this.switchMode('path');
+            get('modePhoto').onclick = () => this.switchMode('photo');
+            get('toggleGuide').onclick = () => this.toggleHelpers();
+            get('rec-btn').onclick = () => this.startRecording();
+            get('stop-rec-overlay').onclick = () => this.stopRecording();
+            get('toggleUI').onclick = () => get('app-ui').classList.toggle('collapsed');
+            get('fontToggle').onclick = () => { this.params.fontIdx = (this.params.fontIdx+1)%4; this.updateText(); };
+            get('textInput').oninput = () => this.updateText();
+            get('colorPicker').oninput = () => this.updateText();
+            
+            this._setupBGTouch();
+        }
+
+        switchMode(m) {
+            this.params.mode = m;
+            document.getElementById('modePath').classList.toggle('active', m==='path');
+            document.getElementById('modePhoto').classList.toggle('active', m==='photo');
+            this.drag.enabled = (m === 'path');
+            this.orbit.enabled = (m === 'path');
+        }
+
+        toggleHelpers() {
+            this.params.helpers = !this.params.helpers;
+            this.grid.visible = this.params.helpers;
+            this.points.forEach(p => p.visible = this.params.helpers);
+            document.getElementById('toggleGuide').innerText = this.params.helpers ? "👁️" : "🙈";
+        }
+
         async startCamera() {
-            try {
-                const constraints = { video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                const v = document.getElementById('bg-video');
-                v.srcObject = stream;
-                v.onloadedmetadata = () => { v.play(); this.activeMedia = v; };
-            } catch (err) { alert("無法開啟相機: " + err); }
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+            const v = document.getElementById('bg-video');
+            v.srcObject = stream;
+            v.onloadedmetadata = () => { v.play(); this.activeMedia = v; };
         }
 
         _renderLoop() {
             requestAnimationFrame(() => this._renderLoop());
-            this.orbit.update();
+            if (this.params.mode === 'path') this.orbit.update();
             this._animateText();
             this.renderer.render(this.scene, this.camera);
 
@@ -135,49 +189,37 @@
                 const mw = this.activeMedia.videoWidth || this.activeMedia.naturalWidth;
                 const mh = this.activeMedia.videoHeight || this.activeMedia.naturalHeight;
                 
-                // 🛠️ 絕對比例修正算法 (Object-fit Cover 邏輯)
-                const scale = Math.max(cw / mw, ch / mh);
-                const x = (cw - mw * scale) / 2;
-                const y = (ch - mh * scale) / 2;
+                // 🛠️ 終極校正：計算 Cover 縮放
+                const scale = Math.max(cw / mw, ch / mh) * this.bgParams.scale;
+                const x = (cw - mw * scale) / 2 + (this.bgParams.x * window.devicePixelRatio);
+                const y = (ch - mh * scale) / 2 + (this.bgParams.y * window.devicePixelRatio);
 
                 this.ctx.drawImage(this.activeMedia, x, y, mw * scale, mh * scale);
             }
             this.ctx.drawImage(this.renderer.domElement, 0, 0, cw, ch);
         }
 
-        _bindUI() {
-            const get = (id) => document.getElementById(id);
-            get('camBtn').onclick = () => this.startCamera();
-            get('openAlbum').onclick = () => get('media-input').click();
-            get('media-input').onchange = (e) => {
-                const i = document.getElementById('bg-image');
-                i.src = URL.createObjectURL(e.target.files[0]);
-                i.onload = () => this.activeMedia = i;
-            };
-            get('rec-btn').onclick = () => this.startRecording();
-            get('stop-rec-overlay').onclick = () => this.stopRecording();
-            get('toggleUI').onclick = () => get('app-ui').classList.toggle('collapsed');
-            get('fontToggle').onclick = () => { this.params.fontIdx = (this.params.fontIdx + 1) % 4; this.updateText(); };
-            get('textInput').oninput = () => this.updateText();
-            get('colorPicker').oninput = () => this.updateText();
-            get('toggleGuide').onclick = () => this.toggleHelpers(true);
-        }
-
         startRecording() {
             this.isRecording = true;
             document.getElementById('stop-rec-overlay').style.display = 'block';
             document.getElementById('app-ui').classList.add('collapsed');
-            if(this.params.helpers) this.toggleHelpers();
+            const prevHelpers = this.params.helpers;
+            if(prevHelpers) this.toggleHelpers();
             
-            // 錄製設定
             const stream = this.displayCanvas.captureStream(30);
-            const types = ['video/webm;codecs=vp9', 'video/webm', 'video/mp4'];
-            const type = types.find(t => MediaRecorder.isTypeSupported(t));
-            
-            this.mediaRecorder = new MediaRecorder(stream, { mimeType: type });
+            this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
             this.recordedChunks = [];
-            this.mediaRecorder.ondataavailable = e => { if(e.data.size > 0) this.recordedChunks.push(e.data); };
-            this.mediaRecorder.onstop = () => this._export();
+            this.mediaRecorder.ondataavailable = e => this.recordedChunks.push(e.data);
+            this.mediaRecorder.onstop = () => {
+                const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `AR_Works.webm`;
+                a.click();
+                document.getElementById('loading-overlay').style.display = 'none';
+                document.getElementById('app-ui').classList.remove('collapsed');
+                if(prevHelpers) this.toggleHelpers();
+            };
             this.mediaRecorder.start();
         }
 
@@ -185,28 +227,30 @@
             this.isRecording = false;
             this.mediaRecorder.stop();
             document.getElementById('stop-rec-overlay').style.display = 'none';
-        }
-
-        _export() {
             document.getElementById('loading-overlay').style.display = 'flex';
-            const blob = new Blob(this.recordedChunks, { type: this.mediaRecorder.mimeType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `AR_Video_${Date.now()}.webm`;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                document.getElementById('loading-overlay').style.display = 'none';
-                document.getElementById('app-ui').classList.remove('collapsed');
-                this.toggleHelpers();
-                URL.revokeObjectURL(url);
-            }, 1000);
         }
 
-        toggleHelpers(m=false) { if(m) this.params.helpers=!this.params.helpers; this.grid.visible=this.params.helpers; this.points.forEach(p=>p.visible=this.params.helpers); }
-        _createPoint(pos, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color })); m.position.copy(pos); this.scene.add(m); return m; }
-        
+        // ...背景調整與 3D 文字邏輯...
+        _setupBGTouch() {
+            let lx, ly, ld;
+            this.displayCanvas.addEventListener('touchstart', (e) => {
+                if (this.params.mode !== 'photo') return;
+                lx = e.touches[0].clientX; ly = e.touches[0].clientY;
+                if (e.touches.length === 2) ld = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+            });
+            this.displayCanvas.addEventListener('touchmove', (e) => {
+                if (this.params.mode !== 'photo') return;
+                if (e.touches.length === 1) { 
+                    this.bgParams.x += e.touches[0].clientX - lx; 
+                    this.bgParams.y += e.touches[0].clientY - ly; 
+                    lx = e.touches[0].clientX; ly = e.touches[0].clientY; 
+                } else if (e.touches.length === 2) {
+                    const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                    this.bgParams.scale *= (d / ld); ld = d;
+                }
+            });
+        }
+        _createPoint(pos, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(30), new THREE.MeshBasicMaterial({ color })); m.position.copy(pos); this.scene.add(m); return m; }
         async updateText() {
             const style = this.params.fontStyles[this.params.fontIdx];
             if (!document.fonts.check(style)) await document.fonts.load(style);
@@ -227,7 +271,6 @@
                 this.scene.add(g); this.charGroups.push(g);
             });
         }
-
         _animateText() {
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
             const baseTime = Date.now() * 0.0008 * this.params.speed;
@@ -237,7 +280,7 @@
             });
         }
     }
-    window.onload = () => new ARRatioMaster();
+    window.onload = () => new ARUltraFix();
 </script>
 </body>
 </html>
