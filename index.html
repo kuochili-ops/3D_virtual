@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>FlipBoardAR Final Pro</title>
+    <title>FlipBoardAR Vertical Path</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Long+Cang&family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; height: 100vh; }
@@ -31,7 +31,7 @@
 <div id="app-ui">
     <div class="ui-content">
         <div class="ui-row">
-            <input type="text" id="textInput" value="字從紅球出發">
+            <input type="text" id="textInput" value="立體垂直對齊">
             <input type="color" id="colorPicker" value="#ffffff" style="width:40px; height:40px; border:none; background:none;">
             <button class="btn" id="fontToggle" style="flex:0.4">字型</button>
         </div>
@@ -60,7 +60,7 @@
     import { DragControls } from 'three/addons/controls/DragControls.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    class ARFinalApp {
+    class ARVerticalApp {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -75,18 +75,17 @@
             this.renderer.setPixelRatio(window.devicePixelRatio);
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
 
-            this.camera.position.set(0, 400, 1200);
+            this.camera.position.set(0, 500, 1500);
             this.camera.lookAt(0, 0, 0);
 
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
             this.grid = new THREE.GridHelper(2000, 20, 0x00ffff, 0x222222);
             this.scene.add(this.grid);
             
-            // 點位：[0]綠球, [1]黃球, [2]紅球
             this.points = [
-                this._createPoint(new THREE.Vector3(-400, 200, 0), 0x00ff00),
-                this._createPoint(new THREE.Vector3(0, 600, 0), 0xffff00),
-                this._createPoint(new THREE.Vector3(400, 200, 0), 0xff0000)
+                this._createPoint(new THREE.Vector3(-400, 100, 0), 0x00ff00),
+                this._createPoint(new THREE.Vector3(0, 500, 300), 0xffff00),
+                this._createPoint(new THREE.Vector3(400, 100, 0), 0xff0000)
             ];
             
             this.drag = new DragControls([...this.points], this.camera, this.renderer.domElement);
@@ -129,7 +128,6 @@
             get('textInput').oninput = () => this.updateText();
             get('colorPicker').oninput = () => this.updateText();
 
-            // 背景觸控邏輯
             let lx, ly, ld;
             const container = document.getElementById('canvas-container');
             container.addEventListener('touchstart', (e) => {
@@ -185,30 +183,36 @@
                 ctx.fillStyle = document.getElementById('colorPicker').value; ctx.fillText(c, 256, 256);
                 const tex = new THREE.CanvasTexture(canvas);
                 const g = new THREE.Group();
-                for (let j = 0; j < 12; j++) {
-                    const m = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1 }));
-                    m.position.z = -j * 2.5; g.add(m);
+                for (let j = 0; j < 15; j++) {
+                    const m = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.1, side: THREE.DoubleSide }));
+                    m.position.z = -j * 2.8; g.add(m);
                 }
                 this.scene.add(g); this.charGroups.push(g);
             });
         }
         
-        // 🛠️ 核心修正：文字從紅球(t=1)流向綠球(t=0)，且X軸平行於連線
+        // 🛠️ 核心修正：讓字面垂直於路徑
         _animateText() {
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
             const baseTime = (Date.now() / 1000) * this.params.speed;
-            const lineVec = new THREE.Vector3().subVectors(this.points[2].position, this.points[0].position).normalize();
             
             this.charGroups?.forEach((g, i) => {
                 let progress = (baseTime - i * this.params.spacing) % 2.0; 
                 if (progress >= 0 && progress <= 1) { 
-                    let t = 1.0 - progress; // 反轉路徑：1 到 0
+                    let t = 1.0 - progress; 
                     const pos = curve.getPointAt(t); 
+                    const tangent = curve.getTangentAt(t).normalize(); // 取得當前路徑切線
+                    
                     g.position.copy(pos); 
                     
-                    g.rotation.set(0, 0, 0);
-                    g.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), lineVec);
-                    g.lookAt(new THREE.Vector3(pos.x, pos.y, pos.z + 1000));
+                    // 🛠️ 旋轉逻辑：
+                    // 1. 讓字的 Z 軸朝向切線 (側面垂直於路徑)
+                    // 2. 使用 lookAt 讓物體對準下一個點
+                    const nextPos = curve.getPointAt(Math.max(0, t - 0.01));
+                    g.lookAt(nextPos);
+                    
+                    // 3. 旋轉 90 度，確保字面是立著的
+                    g.rotateY(Math.PI / 2); 
                     
                     g.visible = true; 
                 } else {
@@ -230,7 +234,7 @@
             this.mediaRecorder.ondataavailable = e => this.chunks.push(e.data);
             this.mediaRecorder.onstop = () => {
                 const b = new Blob(this.chunks, { type: 'video/webm' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'AR_FlipBoard.webm'; a.click();
+                const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'AR_Vertical.webm'; a.click();
             };
             const draw = () => {
                 if(!this.isRecording) return;
@@ -248,7 +252,7 @@
         }
         stopRecording() { this.isRecording = false; this.mediaRecorder.stop(); document.getElementById('stop-rec-overlay').style.display = 'none'; }
     }
-    window.onload = () => new ARFinalApp();
+    window.onload = () => new ARVerticalApp();
 </script>
 </body>
 </html>
