@@ -3,45 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlipBoardAR Pro v2</title>
+    <title>FlipBoardAR Social Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Long+Cang&family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
         #media-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; z-index: 1; }
         #bg-image, #bg-video { flex-shrink: 0; object-fit: contain; transform-origin: center; }
-        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: auto; }
-        
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
         #app-ui { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 100; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); transition: transform 0.3s; border-top: 1px solid #333; }
         #app-ui.collapsed { transform: translateY(calc(100% - 40px)); }
-        
         .tab-handle { height: 40px; display: flex; justify-content: center; align-items: center; color: #00ffff; cursor: pointer; font-weight: bold; }
         .ui-content { padding: 15px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
         .ui-row { width: 92%; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        
         .slider-group { flex: 1; display: flex; flex-direction: column; }
         .slider-label { color: #00ffff; font-size: 10px; margin-bottom: 4px; display: flex; justify-content: space-between; }
         input[type="range"] { width: 100%; accent-color: #00ffff; }
-        
         .btn { flex: 1; background: #00ffff; border: none; padding: 10px 5px; border-radius: 6px; font-weight: bold; font-size: 11px; color: #000; }
         .mode-btn { background: #444; color: #ccc; }
         .active-mode { background: #ffaa00 !important; color: #000 !important; }
         input[type="text"] { background: #111; border: 1px solid #00ffff; color: #fff; padding: 8px; border-radius: 6px; width: 45%; }
         
-        /* 🔴 錄影鍵樣式強化 */
-        #rec-btn { 
-            width: 44px; height: 44px; border: 3px solid #fff; background: #ff0000; 
-            border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 10px rgba(255,0,0,0.5);
-            cursor: pointer; display: flex; justify-content: center; align-items: center;
-        }
-        #rec-btn:active { transform: scale(0.9); background: #aa0000; }
+        /* 🔴 錄影鍵 - 增加發光效果提醒錄製中 */
+        #rec-btn { width: 48px; height: 48px; border: 3px solid #fff; background: #ff0000; border-radius: 50%; box-shadow: 0 0 15px rgba(255,0,0,0.4); cursor: pointer; }
+        #rec-btn.recording { background: #fff; border-radius: 8px; animation: pulse-red 1.5s infinite; }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(255, 0, 0, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); } }
 
-        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; z-index: 1000; color: #00ffff; justify-content: center; align-items: center; font-weight: bold; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; z-index: 1000; color: #00ffff; justify-content: center; align-items: center; }
         .hint { color: #ffaa00; font-size: 10px; position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; z-index: 50; }
     </style>
 </head>
 <body>
 
-<div id="loading-overlay">字型同步中...</div>
+<div id="loading-overlay">正在匯出影片...</div>
 <div class="hint" id="ui-hint">📍 調整路徑模式</div>
 
 <div id="media-layer">
@@ -54,27 +47,24 @@
     <div class="tab-handle" id="toggleUI">🔼 收合選單</div>
     <div class="ui-content">
         <div class="ui-row">
-            <input type="text" id="textInput" value="啟動成功">
-            <input type="color" id="colorPicker" value="#ffffff">
+            <input type="text" id="textInput" value="社群分享">
+            <input type="color" id="colorPicker" value="#00ffff">
             <button class="btn" id="fontToggle" style="background:#ff00ff; color:#fff; flex: 0.6;">更換字型</button>
         </div>
-
         <div class="ui-row">
             <div class="slider-group">
-                <div class="slider-label"><span>飛行速度</span><span id="speedVal">1.0</span></div>
+                <div class="slider-label"><span>速度</span><span id="speedVal">1.0</span></div>
                 <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1.0">
             </div>
             <div class="slider-group">
-                <div class="slider-label"><span>文字間距</span><span id="spacingVal">0.12</span></div>
+                <div class="slider-label"><span>字距</span><span id="spacingVal">0.12</span></div>
                 <input type="range" id="spacingSlider" min="0.01" max="0.5" step="0.01" value="0.12">
             </div>
         </div>
-
         <div class="ui-row">
             <button class="btn mode-btn active-mode" id="modePath">📍 3D 路徑</button>
             <button class="btn mode-btn" id="modePhoto">🖼️ 背景調整</button>
         </div>
-
         <div class="ui-row">
             <button class="btn" id="camBtn">📷 鏡頭</button>
             <button class="btn" id="openAlbum" style="background:#fff;">📂 照片</button>
@@ -98,37 +88,31 @@
     import { DragControls } from 'three/addons/controls/DragControls.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    class FlipBoardARModule {
+    class ARSocialModule {
         constructor() {
             this.scene = new THREE.Scene();
-            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
-            
-            this.params = {
-                speed: 1.0, spacing: 0.12, mode: 'path', helpers: true, fontIdx: 0,
-                fontStyles: ['900 400px "Noto Serif TC"', '400 400px "Long Cang"', '400 400px "ZCOOL QingKe HuangYou"', '900 400px "Noto Sans TC"']
-            };
-
+            this.params = { speed: 1.0, spacing: 0.12, mode: 'path', helpers: true, fontIdx: 0, fontStyles: ['900 400px "Noto Serif TC"', '400 400px "Long Cang"', '400 400px "ZCOOL QingKe HuangYou"', '900 400px "Noto Sans TC"'] };
             this.bgParams = { scale: 1, x: 0, y: 0 };
+            
+            this.mediaRecorder = null;
+            this.recordedChunks = [];
+            this.isRecording = false;
+
             this.init();
         }
 
         init() {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.renderer.setPixelRatio(window.devicePixelRatio);
             document.getElementById('canvas-container').appendChild(this.renderer.domElement);
             this.camera.position.set(0, 200, 1000);
-
             this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
             this.grid = new THREE.GridHelper(2000, 25, 0x00ffff, 0x333333);
             this.scene.add(this.grid);
 
-            this.points = [
-                this._createPoint(new THREE.Vector3(300, 50, 0), 0x00ff00),   
-                this._createPoint(new THREE.Vector3(0, 300, 200), 0xffff00), 
-                this._createPoint(new THREE.Vector3(-300, 50, 0), 0xff0000)   
-            ];
-
+            this.points = [this._createPoint(new THREE.Vector3(300, 50, 0), 0x00ff00), this._createPoint(new THREE.Vector3(0, 300, 200), 0xffff00), this._createPoint(new THREE.Vector3(-300, 50, 0), 0xff0000)];
             this.drag = new DragControls([...this.points], this.camera, this.renderer.domElement);
             this.drag.addEventListener('dragstart', () => this.orbit.enabled = false);
             this.drag.addEventListener('dragend', () => this.orbit.enabled = true);
@@ -151,35 +135,67 @@
             get('toggleUI').onclick = () => get('app-ui').classList.toggle('collapsed');
             get('textInput').oninput = () => this.updateText();
             get('colorPicker').oninput = () => this.updateText();
-            get('toggleGuide').onclick = () => this.toggleHelpers();
-            
-            // 🔴 錄影鍵功能：自動清理畫面
-            get('rec-btn').onclick = () => {
-                this.params.helpers = true; this.toggleHelpers(); // 強制隱藏輔助物
-                get('app-ui').classList.add('collapsed'); // 收合選單
-                setTimeout(() => {
-                    alert("✨ 輔助工具已隱藏，請開啟手機螢幕錄影開始拍攝！\n(點擊上方選單可重新顯示)");
-                }, 300);
-            };
-
+            get('toggleGuide').onclick = () => this.toggleHelpers(true);
+            get('rec-btn').onclick = () => this.handleRecording();
             this._setupBGTouch();
         }
 
-        toggleHelpers() {
-            this.params.helpers = !this.params.helpers;
+        toggleHelpers(manual = false) {
+            if(manual) this.params.helpers = !this.params.helpers;
             this.grid.visible = this.params.helpers;
             this.points.forEach(p => p.visible = this.params.helpers);
             document.getElementById('toggleGuide').innerText = this.params.helpers ? "👁️" : "🙈";
         }
 
-        // ... 其餘邏輯 (updateText, setMode, Camera, BG, Animate) 保持不變 ...
+        async handleRecording() {
+            const btn = document.getElementById('rec-btn');
+            const ui = document.getElementById('app-ui');
+
+            if (!this.isRecording) {
+                // 開始錄製前的清潔
+                const prevHelpers = this.params.helpers;
+                if (prevHelpers) { this.params.helpers = false; this.toggleHelpers(); }
+                ui.classList.add('collapsed');
+
+                this.isRecording = true;
+                btn.classList.add('recording');
+                
+                const stream = this.renderer.domElement.captureStream(60);
+                this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+                this.recordedChunks = [];
+                this.mediaRecorder.ondataavailable = e => this.recordedChunks.push(e.data);
+                this.mediaRecorder.onstop = () => {
+                    this._exportVideo();
+                    if (prevHelpers) { this.params.helpers = true; this.toggleHelpers(); }
+                };
+                this.mediaRecorder.start();
+            } else {
+                this.isRecording = false;
+                btn.classList.remove('recording');
+                this.mediaRecorder.stop();
+                ui.classList.remove('collapsed');
+            }
+        }
+
+        _exportVideo() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+            const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `FlipBoard_Social_${Date.now()}.webm`;
+            a.click();
+            setTimeout(() => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                URL.revokeObjectURL(url);
+                alert("✨ 錄影已完成！\n提示：此影片為透明背景，適合在 IG Story 中作為『貼紙』疊加在真實影片上，效果更專業！");
+            }, 500);
+        }
+
+        // ... 其餘 3D 渲染邏輯 (updateText, Camera, Animate...) 與前版本相同 ...
         async updateText() {
             const style = this.params.fontStyles[this.params.fontIdx];
-            if (!document.fonts.check(style)) {
-                document.getElementById('loading-overlay').style.display = 'flex';
-                await document.fonts.load(style);
-                document.getElementById('loading-overlay').style.display = 'none';
-            }
+            if (!document.fonts.check(style)) await document.fonts.load(style);
             if (this.charGroups) this.charGroups.forEach(g => this.scene.remove(g));
             this.charGroups = [];
             const text = document.getElementById('textInput').value || "";
@@ -196,32 +212,12 @@
                     m.position.z = -j * 1.8; m.material.opacity = (1 - j/22);
                     g.add(m);
                 }
-                this.scene.add(g);
-                this.charGroups.push(g);
+                this.scene.add(g); this.charGroups.push(g);
             });
         }
-
-        setMode(m) {
-            this.params.mode = m;
-            this.drag.enabled = (m === 'path');
-            this.orbit.enabled = (m === 'path');
-            document.getElementById('modePath').classList.toggle('active-mode', m === 'path');
-            document.getElementById('modePhoto').classList.toggle('active-mode', m === 'photo');
-        }
-
-        async startCamera() {
-            const v = document.getElementById('bg-video'); const i = document.getElementById('bg-image');
-            i.style.display = 'none'; v.style.display = 'block';
-            v.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            this.activeEl = v;
-        }
-
-        loadPhoto(file) {
-            const i = document.getElementById('bg-image'); const v = document.getElementById('bg-video');
-            v.style.display = 'none'; i.style.display = 'block';
-            i.src = URL.createObjectURL(file); this.activeEl = i;
-        }
-
+        setMode(m) { this.params.mode = m; this.drag.enabled = (m === 'path'); this.orbit.enabled = (m === 'path'); document.getElementById('modePath').classList.toggle('active-mode', m === 'path'); document.getElementById('modePhoto').classList.toggle('active-mode', m === 'photo'); }
+        async startCamera() { const v = document.getElementById('bg-video'); const i = document.getElementById('bg-image'); i.style.display = 'none'; v.style.display = 'block'; v.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }); this.activeEl = v; }
+        loadPhoto(file) { const i = document.getElementById('bg-image'); const v = document.getElementById('bg-video'); v.style.display = 'none'; i.style.display = 'block'; i.src = URL.createObjectURL(file); this.activeEl = i; }
         _setupBGTouch() {
             let lx, ly, ld;
             this.renderer.domElement.addEventListener('touchstart', (e) => {
@@ -231,22 +227,12 @@
             });
             this.renderer.domElement.addEventListener('touchmove', (e) => {
                 if (this.params.mode !== 'photo') return;
-                if (e.touches.length === 1) {
-                    this.bgParams.x += e.touches[0].clientX - lx; this.bgParams.y += e.touches[0].clientY - ly;
-                    lx = e.touches[0].clientX; ly = e.touches[0].clientY;
-                } else if (e.touches.length === 2) {
-                    const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                    this.bgParams.scale *= (d / ld); ld = d;
-                }
+                if (e.touches.length === 1) { this.bgParams.x += e.touches[0].clientX - lx; this.bgParams.y += e.touches[0].clientY - ly; lx = e.touches[0].clientX; ly = e.touches[0].clientY; }
+                else if (e.touches.length === 2) { const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); this.bgParams.scale *= (d / ld); ld = d; }
                 if (this.activeEl) this.activeEl.style.transform = `translate(${this.bgParams.x}px, ${this.bgParams.y}px) scale(${this.bgParams.scale})`;
             });
         }
-
-        _createPoint(pos, color) {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
-            m.position.copy(pos); this.scene.add(m); return m;
-        }
-
+        _createPoint(pos, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(35), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 })); m.position.copy(pos); this.scene.add(m); return m; }
         _animate() {
             requestAnimationFrame(() => this._animate());
             this.orbit.update();
@@ -254,18 +240,12 @@
             const baseTime = Date.now() * 0.0008 * this.params.speed;
             this.charGroups?.forEach((g, i) => {
                 let t = (baseTime - i * this.params.spacing) % 2.5 - 0.5;
-                if (t >= 0 && t <= 1) {
-                    const pos = curve.getPointAt(t);
-                    g.position.copy(pos);
-                    g.lookAt(pos.clone().add(curve.getTangentAt(t).normalize()));
-                    g.rotateY(Math.PI / 2);
-                    g.visible = true;
-                } else g.visible = false;
+                if (t >= 0 && t <= 1) { const pos = curve.getPointAt(t); g.position.copy(pos); g.lookAt(pos.clone().add(curve.getTangentAt(t).normalize())); g.rotateY(Math.PI / 2); g.visible = true; } else g.visible = false;
             });
             this.renderer.render(this.scene, this.camera);
         }
     }
-    window.onload = () => new FlipBoardARModule();
+    window.onload = () => new ARSocialModule();
 </script>
 </body>
 </html>
