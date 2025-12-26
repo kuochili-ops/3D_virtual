@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>FlipBoardAR Flow Fix</title>
+    <title>FlipBoardAR Parallel Fix</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&family=Long+Cang&family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+TC:wght@900&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; height: 100vh; }
@@ -31,8 +31,8 @@
 <div id="app-ui">
     <div class="ui-content">
         <div class="ui-row">
-            <input type="text" id="textInput" value="文字移動修正">
-            <input type="color" id="colorPicker" value="#00ffff" style="width:40px; height:40px; border:none;">
+            <input type="text" id="textInput" value="平行路徑測試">
+            <input type="color" id="colorPicker" value="#ffffff" style="width:40px; height:40px; border:none;">
             <button class="btn" id="fontToggle" style="flex:0.4">字型</button>
         </div>
         <div class="ui-row">
@@ -60,7 +60,7 @@
     import { DragControls } from 'three/addons/controls/DragControls.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    class ARFlowFix {
+    class ARParallelFlow {
         constructor() {
             this.scene = new THREE.Scene();
             this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -82,10 +82,9 @@
             this.grid = new THREE.GridHelper(2000, 20, 0x00ffff, 0x222222);
             this.scene.add(this.grid);
             
-            // 🛠️ 確保初始路徑在相機視野中央，且有高度
             this.points = [
                 this._createPoint(new THREE.Vector3(-400, 200, 0), 0x00ff00),
-                this._createPoint(new THREE.Vector3(0, 600, 200), 0xffff00),
+                this._createPoint(new THREE.Vector3(0, 600, 0), 0xffff00),
                 this._createPoint(new THREE.Vector3(400, 200, 0), 0xff0000)
             ];
             
@@ -115,7 +114,6 @@
                 i.src = URL.createObjectURL(e.target.files[0]);
                 i.style.display = 'block';
                 document.getElementById('bg-video').style.display = 'none';
-                this.bgParams = { scale: 1, x: 0, y: 0 };
             };
             get('toggleGuide').onclick = () => {
                 this.params.helpers = !this.params.helpers;
@@ -189,24 +187,28 @@
             });
         }
         
-        // 🛠️ 強化動畫流動邏輯
+        // 🛠️ 核心：文字 X 軸與起終點連線平行
         _animateText() {
             const curve = new THREE.QuadraticBezierCurve3(this.points[0].position, this.points[1].position, this.points[2].position);
-            // 增加基本時間的流動感
             const baseTime = (Date.now() / 1000) * this.params.speed;
             
+            // 計算起點與終點的連線向量
+            const lineVec = new THREE.Vector3().subVectors(this.points[2].position, this.points[0].position).normalize();
+            
             this.charGroups?.forEach((g, i) => {
-                // 調整 t 的計算，讓循環更平滑
                 let t = (baseTime - i * this.params.spacing) % 2.0; 
-                
-                // 讓文字在 0 到 1 之間的路徑上顯示
                 if (t >= 0 && t <= 1) { 
                     const pos = curve.getPointAt(t); 
                     g.position.copy(pos); 
-                    // 讓文字面朝前進方向
-                    const tangent = curve.getTangentAt(t);
-                    g.lookAt(pos.clone().add(tangent)); 
-                    g.rotateY(Math.PI / 2); 
+                    
+                    // 🛠️ 旋轉邏輯：讓文字的面朝向相機，且 X 軸平行於起終連線
+                    // 我們不使用曲線的切線，而是使用剛才算的連線向量
+                    g.rotation.set(0, 0, 0); // 先重置旋轉
+                    g.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), lineVec);
+                    
+                    // 為了讓文字在立體空間中能從正面被看見，微調 Y 軸對準相機視線
+                    g.lookAt(new THREE.Vector3(pos.x, pos.y, pos.z + 1000));
+                    
                     g.visible = true; 
                 } else {
                     g.visible = false; 
@@ -214,7 +216,6 @@
             });
         }
 
-        // 錄影邏輯簡化
         startRecording() {
             this.isRecording = true;
             document.getElementById('stop-rec-overlay').style.display = 'block';
@@ -228,7 +229,7 @@
             this.mediaRecorder.ondataavailable = e => this.chunks.push(e.data);
             this.mediaRecorder.onstop = () => {
                 const b = new Blob(this.chunks, { type: 'video/webm' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'AR_Video.webm'; a.click();
+                const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'AR_Parallel.webm'; a.click();
             };
             const draw = () => {
                 if(!this.isRecording) return;
@@ -246,7 +247,7 @@
         }
         stopRecording() { this.isRecording = false; this.mediaRecorder.stop(); document.getElementById('stop-rec-overlay').style.display = 'none'; }
     }
-    window.onload = () => new ARFlowFix();
+    window.onload = () => new ARParallelFlow();
 </script>
 </body>
 </html>
